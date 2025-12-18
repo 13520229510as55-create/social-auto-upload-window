@@ -17,6 +17,11 @@ export const accountApi = {
     return http.post('/account', data)
   },
 
+  // 直接添加账号（不通过登录流程，用于本地上传Cookie）
+  addAccountDirect(data) {
+    return http.post('/addAccountDirect', data)
+  },
+
   // 更新账号
   updateAccount(data) {
     return http.post('/updateUserinfo', data)

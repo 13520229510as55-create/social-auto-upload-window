@@ -1,0 +1,233 @@
+{
+  "workflows": [
+    {
+      "name": "RSSHub Content Flow",
+      "description": "从 RSSHub 获取内容并保存到服务器",
+      "nodes": [
+        {
+          "type": "n8n-nodes-base.rssFeedTrigger",
+          "name": "RSS Feed Trigger",
+          "parameters": {
+            "url": "={{ $env.RSSHUB_BASE_URL }}/twitter/user/{{ $env.TWITTER_USERNAME }}",
+            "options": {
+              "allowUnauthorizedCerts": true
+            }
+          }
+        },
+        {
+          "type": "n8n-nodes-base.function",
+          "name": "Standardize Data",
+          "parameters": {
+            "functionCode": "// 将 RSS 格式转换为统一格式\nconst items = $input.all();\nreturn items.map(item => ({\n  json: {\n    source: 'rsshub',\n    source_platform: 'twitter',\n    content_id: item.json.guid || item.json.link,\n    title: item.json.title,\n    content: item.json.content || item.json.description || '',\n    author: item.json.creator || item.json['dc:creator'] || '',\n    url: item.json.link,\n    published_at: item.json.pubDate || new Date().toISOString(),\n    media_urls: extractMediaUrls(item.json.content || item.json.description || ''),\n    tags: [],\n    metadata: item.json\n  }\n}));\n\n// 提取媒体 URL 的辅助函数\nfunction extractMediaUrls(html) {\n  if (!html) return [];\n  const urls = [];\n  // 提取图片\n  const imgRegex = /<img[^>]+src=\"([^\"]+)\"/g;\n  let match;\n  while ((match = imgRegex.exec(html)) !== null) {\n    urls.push(match[1]);\n  }\n  // 提取视频\n  const videoRegex = /<video[^>]+src=\"([^\"]+)\"/g;\n  while ((match = videoRegex.exec(html)) !== null) {\n    urls.push(match[1]);\n  }\n  return urls;\n}"
+          }
+        },
+        {
+          "type": "n8n-nodes-base.function",
+          "name": "Deduplication",
+          "parameters": {
+            "functionCode": "// 数据去重\nconst items = $input.all();\nconst seen = new Set();\nconst unique = [];\n\nfor (const item of items) {\n  const key = `${item.json.source}_${item.json.content_id}`;\n  if (!seen.has(key)) {\n    seen.add(key);\n    unique.push(item);\n  }\n}\n\nreturn unique;"
+          }
+        },
+        {
+          "type": "n8n-nodes-base.httpRequest",
+          "name": "Save to Server",
+          "parameters": {
+            "method": "POST",
+            "url": "={{ $env.BACKEND_API_URL }}/api/content/save",
+            "authentication": "genericCredentialType",
+            "genericAuthType": "httpHeaderAuth",
+            "sendHeaders": true,
+            "headerParameters": {
+              "parameters": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            },
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "source",
+                  "value": "={{ $json.source }}"
+                },
+                {
+                  "name": "source_platform",
+                  "value": "={{ $json.source_platform }}"
+                },
+                {
+                  "name": "content_id",
+                  "value": "={{ $json.content_id }}"
+                },
+                {
+                  "name": "title",
+                  "value": "={{ $json.title }}"
+                },
+                {
+                  "name": "content",
+                  "value": "={{ $json.content }}"
+                },
+                {
+                  "name": "author",
+                  "value": "={{ $json.author }}"
+                },
+                {
+                  "name": "url",
+                  "value": "={{ $json.url }}"
+                },
+                {
+                  "name": "published_at",
+                  "value": "={{ $json.published_at }}"
+                },
+                {
+                  "name": "media_urls",
+                  "value": "={{ $json.media_urls }}"
+                },
+                {
+                  "name": "tags",
+                  "value": "={{ $json.tags }}"
+                },
+                {
+                  "name": "metadata",
+                  "value": "={{ $json.metadata }}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "MediaCrawler Content Flow",
+      "description": "从 MediaCrawler 获取内容并保存到服务器",
+      "nodes": [
+        {
+          "type": "n8n-nodes-base.scheduleTrigger",
+          "name": "Schedule Trigger",
+          "parameters": {
+            "rule": {
+              "interval": [
+                {
+                  "field": "hours",
+                  "hoursInterval": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "n8n-nodes-base.httpRequest",
+          "name": "Trigger Crawl",
+          "parameters": {
+            "method": "POST",
+            "url": "={{ $env.MEDIACRAWLER_API_URL }}/api/crawl",
+            "sendBody": true,
+            "bodyParameters": {
+              "parameters": [
+                {
+                  "name": "platform",
+                  "value": "xhs"
+                },
+                {
+                  "name": "type",
+                  "value": "search"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "n8n-nodes-base.wait",
+          "name": "Wait for Crawl",
+          "parameters": {
+            "amount": 5,
+            "unit": "minutes"
+          }
+        },
+        {
+          "type": "n8n-nodes-base.httpRequest",
+          "name": "Get Latest Data",
+          "parameters": {
+            "method": "GET",
+            "url": "={{ $env.MEDIACRAWLER_API_URL }}/api/latest?platform=xhs"
+          }
+        },
+        {
+          "type": "n8n-nodes-base.splitInBatches",
+          "name": "Split in Batches",
+          "parameters": {
+            "batchSize": 10
+          }
+        },
+        {
+          "type": "n8n-nodes-base.function",
+          "name": "Deduplication",
+          "parameters": {
+            "functionCode": "// 数据去重\nconst items = $input.all();\nconst seen = new Set();\nconst unique = [];\n\nfor (const item of items) {\n  const key = `${item.json.source}_${item.json.content_id}`;\n  if (!seen.has(key)) {\n    seen.add(key);\n    unique.push(item);\n  }\n}\n\nreturn unique;"
+          }
+        },
+        {
+          "type": "n8n-nodes-base.httpRequest",
+          "name": "Save to Server",
+          "parameters": {
+            "method": "POST",
+            "url": "={{ $env.BACKEND_API_URL }}/api/content/save",
+            "sendBody": true,
+            "bodyContentType": "json",
+            "jsonBody": "={{ JSON.stringify($json) }}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WeWe-RSS Content Flow",
+      "description": "从 WeWe-RSS 获取公众号内容并保存到服务器",
+      "nodes": [
+        {
+          "type": "n8n-nodes-base.rssFeedTrigger",
+          "name": "RSS Feed Trigger",
+          "parameters": {
+            "url": "={{ $env.WEWE_RSS_URL }}/feeds/all.rss",
+            "options": {
+              "allowUnauthorizedCerts": true
+            }
+          }
+        },
+        {
+          "type": "n8n-nodes-base.function",
+          "name": "Standardize Data",
+          "parameters": {
+            "functionCode": "// 将 RSS 格式转换为统一格式\nconst items = $input.all();\nreturn items.map(item => ({\n  json: {\n    source: 'wewe-rss',\n    source_platform: 'wechat',\n    content_id: item.json.guid || item.json.link,\n    title: item.json.title,\n    content: item.json.content || item.json.description || '',\n    author: item.json['dc:creator'] || '微信公众号',\n    url: item.json.link,\n    published_at: item.json.pubDate || new Date().toISOString(),\n    media_urls: extractMediaUrls(item.json.content || item.json.description || ''),\n    tags: [],\n    metadata: item.json\n  }\n}));\n\n// 提取媒体 URL\nfunction extractMediaUrls(html) {\n  if (!html) return [];\n  const urls = [];\n  const imgRegex = /<img[^>]+src=\"([^\"]+)\"/g;\n  let match;\n  while ((match = imgRegex.exec(html)) !== null) {\n    urls.push(match[1]);\n  }\n  return urls;\n}"
+          }
+        },
+        {
+          "type": "n8n-nodes-base.function",
+          "name": "Deduplication",
+          "parameters": {
+            "functionCode": "// 数据去重\nconst items = $input.all();\nconst seen = new Set();\nconst unique = [];\n\nfor (const item of items) {\n  const key = `${item.json.source}_${item.json.content_id}`;\n  if (!seen.has(key)) {\n    seen.add(key);\n    unique.push(item);\n  }\n}\n\nreturn unique;"
+          }
+        },
+        {
+          "type": "n8n-nodes-base.httpRequest",
+          "name": "Save to Server",
+          "parameters": {
+            "method": "POST",
+            "url": "={{ $env.BACKEND_API_URL }}/api/content/save",
+            "sendBody": true,
+            "bodyContentType": "json",
+            "jsonBody": "={{ JSON.stringify($json) }}"
+          }
+        }
+      ]
+    }
+  ],
+  "environment_variables": {
+    "RSSHUB_BASE_URL": "https://rsshub.app",
+    "TWITTER_USERNAME": "your_username",
+    "MEDIACRAWLER_API_URL": "http://localhost:5001",
+    "WEWE_RSS_URL": "http://150.107.38.113:4000",
+    "BACKEND_API_URL": "http://your-backend-server:5409"
+  }
+}
+

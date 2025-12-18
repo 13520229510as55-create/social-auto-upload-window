@@ -1,9 +1,13 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { resolveApiBaseUrl } from './apiConfig'
 
 // 创建axios实例
+// 使用统一的 API 基础 URL 解析工具
+const baseURL = resolveApiBaseUrl()
+
 const request = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5409',
+  baseURL: baseURL,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -12,6 +16,22 @@ const request = axios.create({
 // 请求拦截器
 request.interceptors.request.use(
   (config) => {
+    // 运行时检查：如果URL包含localhost，强制使用相对路径
+    if (config.url && typeof config.url === 'string') {
+      // 如果URL是完整URL且包含localhost，移除协议和域名
+      if (config.url.startsWith('http://localhost') || config.url.startsWith('https://localhost') || 
+          config.url.startsWith('http://127.0.0.1') || config.url.startsWith('https://127.0.0.1')) {
+        const urlObj = new URL(config.url)
+        config.url = urlObj.pathname + (urlObj.search || '')
+      }
+    }
+    
+    // 检查baseURL，如果包含localhost，使用相对路径
+    if (config.baseURL && (config.baseURL.includes('localhost') || config.baseURL.includes('127.0.0.1'))) {
+      const urlObj = new URL(config.baseURL, 'http://dummy.com')
+      config.baseURL = urlObj.pathname || '/api'
+    }
+    
     // 可以在这里添加token等认证信息
     const token = localStorage.getItem('token')
     if (token) {

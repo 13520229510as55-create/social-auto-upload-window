@@ -1,0 +1,97 @@
+.mdnice-preview {
+  font-family: 'SF Pro SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #1f2933;
+  background-color: #fff;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  word-break: break-word;
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    margin-top: 1.2em;
+    margin-bottom: 0.6em;
+    font-weight: 600;
+    color: #111827;
+  }
+
+  p {
+    margin: 0 0 1em;
+  }
+
+  a {
+    color: #2563eb;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  blockquote {
+    border-left: 4px solid #c084fc;
+    padding: 0.5em 1em;
+    background-color: #f8f5ff;
+    color: #4b5563;
+  }
+
+  code {
+    background-color: rgba(99, 102, 241, 0.08);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: 'Fira Code', 'SFMono-Regular', Consolas, monospace;
+    font-size: 0.95em;
+  }
+
+  pre {
+    background-color: #0f172a;
+    color: #f8fafc;
+    border-radius: 8px;
+    padding: 16px;
+    overflow: auto;
+
+    code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+  }
+
+  ul,
+  ol {
+    padding-left: 1.5em;
+    margin-bottom: 1em;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+    font-size: 0.95em;
+
+    th,
+    td {
+      border: 1px solid #e5e7eb;
+      padding: 8px 12px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f3f4f6;
+      font-weight: 600;
+    }
+  }
+}
+
+.mdnice-empty {
+  margin: 0;
+  color: #94a3b8;
+  font-style: italic;
+}
+

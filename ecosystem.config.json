@@ -1,0 +1,21 @@
+{
+  "apps": [
+    {
+      "name": "sau-backend",
+      "script": "sau_backend.py",
+      "interpreter": "/home/ubuntu/miniconda3/envs/social-auto-upload/bin/python3",
+      "cwd": "/home/ubuntu/social-auto-upload",
+      "env": {
+        "DISPLAY": ":99",
+        "PYTHONUNBUFFERED": "1"
+      },
+      "error_file": "/home/ubuntu/social-auto-upload/logs/backend-error.log",
+      "out_file": "/home/ubuntu/social-auto-upload/logs/backend-out.log",
+      "log_date_format": "YYYY-MM-DD HH:mm:ss Z",
+      "merge_logs": true,
+      "autorestart": true,
+      "max_restarts": 10,
+      "min_uptime": "10s"
+    }
+  ]
+}

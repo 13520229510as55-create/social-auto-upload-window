@@ -87,6 +87,29 @@ def post_video_xhs(title,files,tags,account_file,category=TencentZoneTypes.LIFES
             asyncio.run(app.main(), debug=False)
 
 
+def post_image_text_xhs(
+    title,
+    content,
+    image_files,
+    tags,
+    account_file,
+    enableTimer=False,
+    images_per_day=1,
+    daily_times=None,
+    start_days=0,
+):
+    """
+    小红书图文发布占位函数。
+
+    注意：
+    - 当前本地仓库缺少完整的图文发布实现代码（参考文档 `URL图片支持修复说明.md`）。
+    - 此函数仅为保证后端能够正常启动而提供占位实现。
+    - 如果需要在本地环境使用小红书图文发布，请根据服务器上的实现或文档补全此函数逻辑。
+    """
+    raise NotImplementedError(
+        "post_image_text_xhs 尚未在本地实现，请参考 `URL图片支持修复说明.md` 与服务器版本的 myUtils/postVideo.py。"
+    )
+
 
 # post_video("333",["demo.mp4"],"d","d")
 # post_video_DouYin("333",["demo.mp4"],"d","d")

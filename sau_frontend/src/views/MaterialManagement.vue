@@ -1,61 +1,213 @@
 <template>
   <div class="material-management">
-    <div class="page-header">
-      <h1>素材管理</h1>
-    </div>
-    
-    <div class="material-list-container">
-      <div class="material-search">
-        <el-input
-          v-model="searchKeyword"
-          placeholder="输入文件名搜索"
-          prefix-icon="Search"
-          clearable
-          @clear="handleSearch"
-          @input="handleSearch"
-        />
-        <div class="action-buttons">
-          <el-button type="primary" @click="handleUploadMaterial">上传素材</el-button>
-          <el-button type="info" @click="fetchMaterials" :loading="false">
-            <el-icon :class="{ 'is-loading': isRefreshing }"><Refresh /></el-icon>
-            <span v-if="isRefreshing">刷新中</span>
-          </el-button>
+    <!-- Tab导航 -->
+    <el-tabs v-model="activeTab" class="material-tabs-nav">
+      <el-tab-pane label="本地上传素材" name="local">
+        <div class="material-list-container">
+          <div class="search-bar">
+            <el-input
+              v-model="searchKeyword"
+              placeholder="搜索素材文件名..."
+              prefix-icon="Search"
+              clearable
+              @clear="handleSearch"
+              @input="handleSearch"
+              class="search-input"
+            />
+            <div class="action-buttons">
+              <el-button type="primary" @click="handleUploadMaterial" class="add-btn">
+                <el-icon><Upload /></el-icon>
+                上传素材
+              </el-button>
+              <el-button @click="fetchMaterials" :loading="isRefreshing" class="refresh-btn">
+                <el-icon :class="{ 'is-loading': isRefreshing }"><Refresh /></el-icon>
+                {{ isRefreshing ? '刷新中' : '刷新' }}
+              </el-button>
+            </div>
+          </div>
+          
+          <div v-if="filteredLocalMaterials.length > 0" class="material-list">
+            <el-table :data="filteredLocalMaterials" style="width: 100%">
+              <el-table-column prop="uuid" label="UUID" width="180" />
+              <el-table-column prop="filename" label="文件名" width="300" />
+              <el-table-column prop="filesize" label="文件大小" width="120">
+                <template #default="scope">
+                  {{ scope.row.filesize }} MB
+                </template>
+              </el-table-column>
+              <el-table-column prop="uri" label="地址" width="350" show-overflow-tooltip>
+                <template #default="scope">
+                  <div v-if="scope.row.uri" style="display: flex; align-items: center; gap: 8px;">
+                    <span style="color: #409EFF; cursor: pointer; flex: 1;" @click="handleCopyUri(scope.row.uri)" :title="scope.row.uri">
+                      {{ scope.row.uri }}
+                    </span>
+                  </div>
+                  <span v-else style="color: #909399;">-</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="upload_time" label="上传时间" width="180" />
+              <el-table-column label="操作" width="180">
+                <template #default="scope">
+                  <el-button size="small" @click="handlePreview(scope.row)">预览</el-button>
+                  <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          
+          <div v-else class="empty-data">
+            <el-empty description="暂无本地上传素材" />
+          </div>
         </div>
-      </div>
+      </el-tab-pane>
       
-      <div v-if="filteredMaterials.length > 0" class="material-list">
-        <el-table :data="filteredMaterials" style="width: 100%">
-          <el-table-column prop="uuid" label="UUID" width="180" />
-          <el-table-column prop="filename" label="文件名" width="300" />
-          <el-table-column prop="filesize" label="文件大小" width="120">
-            <template #default="scope">
-              {{ scope.row.filesize }} MB
-            </template>
-          </el-table-column>
-          <el-table-column prop="upload_time" label="上传时间" width="180" />
-          <el-table-column label="操作">
-            <template #default="scope">
-              <el-button size="small" @click="handlePreview(scope.row)">预览</el-button>
-              <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+      <el-tab-pane label="谷歌上传素材" name="google">
+        <div class="material-list-container">
+          <div class="search-bar">
+            <el-input
+              v-model="searchKeyword"
+              placeholder="搜索素材文件名..."
+              prefix-icon="Search"
+              clearable
+              @clear="handleSearch"
+              @input="handleSearch"
+              class="search-input"
+            />
+            <div class="action-buttons">
+              <el-button type="primary" @click="handleUploadToGoogle" class="add-btn">
+                <el-icon><Connection /></el-icon>
+                上传到谷歌存储
+              </el-button>
+              <el-button @click="fetchMaterials" :loading="isRefreshing" class="refresh-btn">
+                <el-icon :class="{ 'is-loading': isRefreshing }"><Refresh /></el-icon>
+                {{ isRefreshing ? '刷新中' : '刷新' }}
+              </el-button>
+            </div>
+          </div>
+          
+          <div v-if="filteredGoogleMaterials.length > 0" class="material-list">
+            <el-table :data="filteredGoogleMaterials" style="width: 100%">
+              <el-table-column prop="uuid" label="UUID" width="180" />
+              <el-table-column prop="filename" label="文件名" width="300" />
+              <el-table-column prop="filesize" label="文件大小" width="120">
+                <template #default="scope">
+                  {{ scope.row.filesize }} MB
+                </template>
+              </el-table-column>
+              <el-table-column prop="uri" label="地址" width="350" show-overflow-tooltip>
+                <template #default="scope">
+                  <div v-if="scope.row.uri" style="display: flex; align-items: center; gap: 8px;">
+                    <span style="color: #409EFF; cursor: pointer; flex: 1;" @click="handleCopyUri(scope.row.uri)" :title="scope.row.uri">
+                      {{ scope.row.uri }}
+                    </span>
+                    <el-button 
+                      size="small" 
+                      type="primary" 
+                      link
+                      @click="handleGetPublicUrl(scope.row)"
+                      :loading="scope.row.loadingPublicUrl"
+                    >
+                      获取公开链接
+                    </el-button>
+                  </div>
+                  <span v-else style="color: #909399;">-</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="upload_time" label="上传时间" width="180" />
+              <el-table-column label="操作" width="180">
+                <template #default="scope">
+                  <el-button size="small" @click="handlePreview(scope.row)">预览</el-button>
+                  <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          
+          <div v-else class="empty-data">
+            <el-empty description="暂无谷歌上传素材" />
+          </div>
+        </div>
+      </el-tab-pane>
       
-      <div v-else class="empty-data">
-        <el-empty description="暂无素材数据" />
-      </div>
-    </div>
+      <el-tab-pane label="生成素材" name="generated">
+        <div class="material-list-container">
+          <div class="search-bar">
+            <el-input
+              v-model="searchKeyword"
+              placeholder="搜索素材文件名..."
+              prefix-icon="Search"
+              clearable
+              @clear="handleSearch"
+              @input="handleSearch"
+              class="search-input"
+            />
+            <div class="action-buttons">
+              <el-button @click="fetchMaterials" :loading="isRefreshing" class="refresh-btn">
+                <el-icon :class="{ 'is-loading': isRefreshing }"><Refresh /></el-icon>
+                {{ isRefreshing ? '刷新中' : '刷新' }}
+              </el-button>
+            </div>
+          </div>
+          
+          <div v-if="filteredGeneratedMaterials.length > 0" class="material-list">
+            <el-table :data="filteredGeneratedMaterials" style="width: 100%">
+              <el-table-column prop="uuid" label="UUID" width="180" />
+              <el-table-column prop="filename" label="文件名" width="300" />
+              <el-table-column prop="filesize" label="文件大小" width="120">
+                <template #default="scope">
+                  {{ scope.row.filesize }} MB
+                </template>
+              </el-table-column>
+              <el-table-column prop="uri" label="地址" width="350" show-overflow-tooltip>
+                <template #default="scope">
+                  <div v-if="scope.row.uri" style="display: flex; align-items: center; gap: 8px;">
+                    <span style="color: #409EFF; cursor: pointer; flex: 1;" @click="handleCopyUri(scope.row.uri)" :title="scope.row.uri">
+                      {{ scope.row.uri }}
+                    </span>
+                  </div>
+                  <span v-else style="color: #909399;">-</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="upload_time" label="上传时间" width="180" />
+              <el-table-column label="操作" width="180">
+                <template #default="scope">
+                  <el-button size="small" @click="handlePreview(scope.row)">预览</el-button>
+                  <el-button size="small" type="danger" @click="handleDelete(scope.row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          
+          <div v-else class="empty-data">
+            <el-empty description="暂无生成素材" />
+          </div>
+        </div>
+      </el-tab-pane>
+    </el-tabs>
     
-    <!-- 上传对话框 -->
+    <!-- 上传对话框（共用） -->
     <el-dialog
       v-model="uploadDialogVisible"
-      title="上传素材"
+      :title="uploadType === 'local' ? '上传素材' : '上传到谷歌存储'"
       width="40%"
       @close="handleUploadDialogClose"
     >
       <div class="upload-form">
         <el-form label-width="80px">
+          <!-- GCS Token 配置（仅谷歌上传时显示） -->
+          <el-form-item v-if="uploadType === 'google'" label="GCS Token:">
+            <el-input
+              v-model="gcsToken"
+              type="password"
+              placeholder="请输入 Google Cloud Storage Access Token"
+              show-password
+              clearable
+              style="width: 100%;"
+            />
+            <div class="form-tip" style="margin-top: 5px; font-size: 12px; color: #909399;">
+              Token 将自动保存，下次使用时自动填充
+            </div>
+          </el-form-item>
           <el-form-item label="文件名称:">
             <el-input
               v-model="customFilename"
@@ -105,7 +257,7 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="uploadDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="submitUpload" :loading="isUploading">
+          <el-button type="primary" @click="handleSubmitUpload" :loading="isUploading">
             {{ isUploading ? '上传中' : '确认上传' }}
           </el-button>
         </div>
@@ -142,13 +294,16 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { Refresh, Upload } from '@element-plus/icons-vue'
+import { Refresh, Upload, FolderOpened, Connection } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { materialApi } from '@/api/material'
 import { useAppStore } from '@/stores/app'
 
 // 获取应用状态管理
 const appStore = useAppStore()
+
+// Tab控制
+const activeTab = ref('local') // 'local', 'google', 'generated'
 
 // 搜索和状态控制
 const searchKeyword = ref('')
@@ -159,12 +314,17 @@ const isUploading = ref(false)
 const uploadDialogVisible = ref(false)
 const previewDialogVisible = ref(false)
 const currentMaterial = ref(null)
+const uploadType = ref('local') // 'local' 或 'google'，用于区分上传类型
 
-// 文件上传
+// 文件上传（共用）
 const fileList = ref([])
 const customFilename = ref('')
 const customFilenameDisabled = computed(() => fileList.value.length > 1)
 const uploadProgress = ref({}); // { [uid]: { percentage: 0, speed: '' } }
+
+// GCS Token 配置
+const GCS_TOKEN_STORAGE_KEY = 'gcs_access_token'
+const gcsToken = ref('')
 
 
 watch(fileList, (newList) => {
@@ -183,6 +343,40 @@ const fetchMaterials = async () => {
     
     if (response.code === 200) {
       appStore.setMaterials(response.data)
+      console.log('[MaterialManagement] 获取素材列表成功，数量:', response.data.length)
+      console.log('[MaterialManagement] 素材来源分布:', {
+        local: response.data.filter(m => !m.source || m.source === '本地上传').length,
+        google: response.data.filter(m => m.source === '谷歌存储上传').length,
+        generated: response.data.filter(m => m.source === '生成素材').length
+      })
+      
+      // 如果当前 tab 没有数据，自动切换到有数据的 tab
+      if (response.data.length > 0) {
+        const hasLocal = response.data.some(m => !m.source || m.source === '本地上传')
+        const hasGoogle = response.data.some(m => m.source === '谷歌存储上传')
+        const hasGenerated = response.data.some(m => m.source === '生成素材')
+        
+        // 检查当前 tab 是否有数据
+        const currentTabHasData = 
+          (activeTab.value === 'local' && hasLocal) ||
+          (activeTab.value === 'google' && hasGoogle) ||
+          (activeTab.value === 'generated' && hasGenerated)
+        
+        // 如果当前 tab 没有数据，切换到有数据的 tab
+        if (!currentTabHasData) {
+          if (hasGenerated) {
+            activeTab.value = 'generated'
+            console.log('[MaterialManagement] 自动切换到生成素材 tab')
+          } else if (hasGoogle) {
+            activeTab.value = 'google'
+            console.log('[MaterialManagement] 自动切换到谷歌上传素材 tab')
+          } else if (hasLocal) {
+            activeTab.value = 'local'
+            console.log('[MaterialManagement] 自动切换到本地上传素材 tab')
+          }
+        }
+      }
+      
       ElMessage.success('刷新成功')
     } else {
       ElMessage.error('获取素材列表失败')
@@ -195,7 +389,53 @@ const fetchMaterials = async () => {
   }
 }
 
-// 过滤素材
+// 根据Tab过滤素材
+const filteredLocalMaterials = computed(() => {
+  let materials = appStore.materials.filter(m => 
+    !m.source || m.source === '本地上传'
+  )
+  
+  if (searchKeyword.value) {
+    const keyword = searchKeyword.value.toLowerCase()
+    materials = materials.filter(material => 
+      material.filename.toLowerCase().includes(keyword)
+    )
+  }
+  
+  return materials
+})
+
+const filteredGoogleMaterials = computed(() => {
+  let materials = appStore.materials.filter(m => 
+    m.source === '谷歌存储上传'
+  )
+  
+  if (searchKeyword.value) {
+    const keyword = searchKeyword.value.toLowerCase()
+    materials = materials.filter(material => 
+      material.filename.toLowerCase().includes(keyword)
+    )
+  }
+  
+  return materials
+})
+
+const filteredGeneratedMaterials = computed(() => {
+  let materials = appStore.materials.filter(m => 
+    m.source === '生成素材'
+  )
+  
+  if (searchKeyword.value) {
+    const keyword = searchKeyword.value.toLowerCase()
+    materials = materials.filter(material => 
+      material.filename.toLowerCase().includes(keyword)
+    )
+  }
+  
+  return materials
+})
+
+// 兼容旧代码（保留）
 const filteredMaterials = computed(() => {
   if (!searchKeyword.value) return appStore.materials
   
@@ -210,12 +450,30 @@ const handleSearch = () => {
   // 搜索逻辑已通过计算属性实现
 }
 
-// 上传素材
+// 上传素材（本地）
 const handleUploadMaterial = () => {
   // 清空变量
   fileList.value = []
   customFilename.value = ''
-  uploadProgress.value = {};
+  uploadProgress.value = {}
+  uploadType.value = 'local'
+  uploadDialogVisible.value = true
+}
+
+// 上传到谷歌存储
+const handleUploadToGoogle = () => {
+  // 清空变量
+  fileList.value = []
+  customFilename.value = ''
+  uploadProgress.value = {}
+  uploadType.value = 'google'
+  // 从 localStorage 读取保存的 token
+  const savedToken = localStorage.getItem(GCS_TOKEN_STORAGE_KEY)
+  if (savedToken) {
+    gcsToken.value = savedToken
+  } else {
+    gcsToken.value = ''
+  }
   uploadDialogVisible.value = true
 }
 
@@ -223,7 +481,8 @@ const handleUploadMaterial = () => {
 const handleUploadDialogClose = () => {
   fileList.value = []
   customFilename.value = ''
-  uploadProgress.value = {};
+  uploadProgress.value = {}
+  // 注意：不在这里清空 gcsToken，保留用户输入
 }
 
 // 文件选择变更
@@ -243,8 +502,17 @@ const handleFileRemove = (file, uploadFileList) => {
   uploadProgress.value = newProgress;
 }
 
-// 提交上传
-const submitUpload = async () => {
+// 提交上传（根据类型调用不同的上传函数）
+const handleSubmitUpload = () => {
+  if (uploadType.value === 'local') {
+    submitLocalUpload()
+  } else {
+    submitGoogleUpload()
+  }
+}
+
+// 提交本地上传
+const submitLocalUpload = async () => {
   if (fileList.value.length === 0) {
     ElMessage.warning('请选择要上传的文件')
     return
@@ -383,11 +651,217 @@ const isImageFile = (filename) => {
   return imageExtensions.some(ext => filename.toLowerCase().endsWith(ext))
 }
 
+// 复制URI地址
+const handleCopyUri = (uri) => {
+  if (!uri) return
+  navigator.clipboard.writeText(uri).then(() => {
+    ElMessage.success('URI地址已复制到剪贴板')
+  }).catch(() => {
+    // 降级方案
+    const textarea = document.createElement('textarea')
+    textarea.value = uri
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    try {
+      document.execCommand('copy')
+      ElMessage.success('URI地址已复制到剪贴板')
+    } catch (err) {
+      ElMessage.error('复制失败')
+    }
+    document.body.removeChild(textarea)
+  })
+}
+
+// 获取谷歌存储文件的公开链接
+const handleGetPublicUrl = async (material) => {
+  if (!material.uri) {
+    ElMessage.warning('该素材没有URI地址')
+    return
+  }
+  
+  // 设置加载状态
+  material.loadingPublicUrl = true
+  
+  try {
+    const response = await materialApi.getGoogleFilePublicUrl(material.uri)
+    
+    if (response.code === 200 && response.data) {
+      const fileInfo = response.data.file_info
+      const fileId = response.data.file_id
+      
+      // 说明：Google Generative AI API的文件需要通过API访问，没有直接的公开链接
+      // 如果需要公开链接，需要将文件上传到Google Cloud Storage并设置公开权限
+      // 这里显示文件信息和API访问地址
+      const message = `文件ID: ${fileId}\n状态: ${fileInfo?.state || '未知'}\n\n注意：Google Generative AI API的文件需要通过API Key访问，没有直接的公开链接。\n\n如果需要公开链接，请将文件上传到Google Cloud Storage并设置公开权限。\n\nAPI访问地址已复制到剪贴板。`
+      
+      ElMessageBox.alert(message, '文件信息', {
+        confirmButtonText: '确定',
+        type: 'info'
+      })
+      
+      // 复制API访问地址
+      handleCopyUri(material.uri)
+    } else {
+      ElMessage.error(response.msg || '获取文件信息失败')
+    }
+  } catch (error) {
+    console.error('获取公开链接出错:', error)
+    ElMessage.error('获取文件信息失败: ' + (error.message || '未知错误'))
+  } finally {
+    material.loadingPublicUrl = false
+  }
+}
+
+// 提交谷歌上传
+const submitGoogleUpload = async () => {
+  if (fileList.value.length === 0) {
+    ElMessage.warning('请选择要上传的文件')
+    return
+  }
+  
+  // 从输入框读取 token（每次上传都使用输入框的当前值）
+  const tokenFromInput = gcsToken.value?.trim() || ''
+  if (!tokenFromInput) {
+    ElMessage.warning('请输入 GCS Token')
+    return
+  }
+  
+  // 保存当前输入框的 token 到 localStorage（用于下次打开对话框时自动填充）
+  localStorage.setItem(GCS_TOKEN_STORAGE_KEY, tokenFromInput)
+  
+  isUploading.value = true
+  
+  for (const file of fileList.value) {
+    try {
+      // 确保文件对象存在
+      if (!file || !file.raw) {
+        ElMessage.warning(`文件 ${file.name} 对象无效，已跳过`)
+        continue
+      }
+      
+      // 确定文件名（支持自定义文件名）
+      let filename = file.name
+      if (fileList.value.length === 1 && customFilename.value.trim()) {
+        // 如果有自定义文件名，保留原文件扩展名
+        const ext = file.name.split('.').pop()
+        filename = `${customFilename.value.trim()}.${ext}`
+      }
+      
+      let lastLoaded = 0
+      let lastTime = Date.now()
+
+      // 使用从输入框读取的 token
+      const response = await materialApi.uploadToGoogleStorage(
+        file.raw, 
+        filename,
+        tokenFromInput, // 使用输入框中的 token
+        (progressEvent) => {
+          const progressData = uploadProgress.value[file.uid]
+          if (!progressData) return
+
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          progressData.percentage = progress
+
+          const currentTime = Date.now()
+          const timeDiff = (currentTime - lastTime) / 1000 // in seconds
+          const loadedDiff = progressEvent.loaded - lastLoaded
+
+          if (timeDiff > 0.5) { // Update speed every 0.5 seconds
+            const speed = loadedDiff / timeDiff // bytes per second
+            if (speed > 1024 * 1024) {
+              progressData.speed = (speed / (1024 * 1024)).toFixed(2) + ' MB/s'
+            } else {
+              progressData.speed = (speed / 1024).toFixed(2) + ' KB/s'
+            }
+            lastLoaded = progressEvent.loaded
+            lastTime = currentTime
+          }
+        }
+      )
+      
+      if (response.status === 200 || response.status === 201 || response.data) {
+        ElMessage.success(`文件 ${file.name} 上传到谷歌存储成功`)
+        const progressData = uploadProgress.value[file.uid]
+        if (progressData) {
+          progressData.percentage = 100
+          progressData.speed = '完成'
+        }
+        
+        // 获取公开访问URL
+        let uri = null
+        if (response.data) {
+          // Google Cloud Storage返回的公开URL
+          uri = response.data.publicUrl || response.data.uri || null
+        }
+        
+        // 计算文件大小（MB）
+        const fileSizeMB = (file.raw.size / (1024 * 1024)).toFixed(2)
+        
+        // 保存素材信息到数据库
+        try {
+          const saveData = {
+            filename: filename,
+            filesize: parseFloat(fileSizeMB),
+            uri: uri,
+            custom_filename: null // 已经在filename中处理了
+          }
+          
+          const saveResponse = await materialApi.saveGoogleStorageMaterial(saveData)
+          if (saveResponse.code === 200) {
+            console.log('素材信息已保存到数据库')
+            // 刷新素材列表
+            await fetchMaterials()
+          } else {
+            console.error('保存素材信息失败:', saveResponse.msg)
+            ElMessage.warning(`文件 ${file.name} 上传成功，但保存信息失败: ${saveResponse.msg}`)
+          }
+        } catch (saveError) {
+          console.error('保存素材信息出错:', saveError)
+          ElMessage.warning(`文件 ${file.name} 上传成功，但保存信息出错`)
+        }
+      } else {
+        ElMessage.error(`文件 ${file.name} 上传失败: ${response.data?.error?.message || '未知错误'}`)
+      }
+    } catch (error) {
+      console.error(`上传文件 ${file.name} 到谷歌存储出错:`, error)
+      const errorMessage = error.response?.data?.error?.message || error.message || '未知错误'
+      ElMessage.error(`文件 ${file.name} 上传失败: ${errorMessage}`)
+      const progressData = uploadProgress.value[file.uid]
+      if (progressData) {
+        progressData.speed = '失败'
+      }
+    }
+  }
+  
+  isUploading.value = false
+  // Keep dialog open to show results
+  // uploadDialogVisible.value = false
+}
+
 // 组件挂载时获取素材列表
-onMounted(() => {
+onMounted(async () => {
   // 只有store中没有数据时才获取
   if (appStore.materials.length === 0) {
-    fetchMaterials()
+    await fetchMaterials()
+  }
+  
+  // 根据数据自动切换到有数据的 tab
+  if (appStore.materials.length > 0) {
+    // 检查哪个 tab 有数据
+    const hasLocal = appStore.materials.some(m => !m.source || m.source === '本地上传')
+    const hasGoogle = appStore.materials.some(m => m.source === '谷歌存储上传')
+    const hasGenerated = appStore.materials.some(m => m.source === '生成素材')
+    
+    // 优先切换到有数据的 tab
+    if (hasGenerated && activeTab.value === 'local') {
+      activeTab.value = 'generated'
+    } else if (hasGoogle && activeTab.value === 'local' && !hasGenerated) {
+      activeTab.value = 'google'
+    } else if (hasLocal && activeTab.value === 'local') {
+      // 保持 local tab
+    }
   }
 })
 </script>
@@ -405,40 +879,129 @@ onMounted(() => {
 }
 
 .material-management {
+  min-height: 100%;
+  animation: fadeIn 0.6s ease-out;
   
-  .page-header {
-    margin-bottom: 20px;
+  // Tab导航样式（参考制作中心）
+  .material-tabs-nav {
+    margin-bottom: 0;
     
-    h1 {
-      font-size: 24px;
+    :deep(.el-tabs__header) {
+      margin: 0 0 0 0;
+      background: white;
+      border-radius: 16px 16px 0 0;
+      padding: 0 24px;
+      border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+    }
+    
+    :deep(.el-tabs__nav-wrap) {
+      &::after {
+        display: none;
+      }
+    }
+    
+    :deep(.el-tabs__item) {
+      height: 56px;
+      line-height: 56px;
+      font-size: 15px;
       font-weight: 500;
-      color: $text-primary;
-      margin: 0;
+      color: #64748b;
+      padding: 0 24px;
+      transition: all 0.3s ease;
+      
+      &:hover {
+        color: #667eea;
+      }
+      
+      &.is-active {
+        color: #667eea;
+        font-weight: 600;
+      }
+    }
+    
+    :deep(.el-tabs__active-bar) {
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      height: 3px;
     }
   }
   
   .material-list-container {
     background-color: #fff;
-    border-radius: 4px;
-    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+    border-radius: 0 0 16px 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     padding: 20px;
+    border-top: 1px solid rgba(102, 126, 234, 0.1);
     
-    .material-search {
+    .search-bar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 20px;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.03) 0%, rgba(118, 75, 162, 0.02) 100%);
+      border-radius: 10px;
+      border: 1px solid rgba(102, 126, 234, 0.08);
       
-      .el-input {
-        width: 300px;
+      .search-input {
+        max-width: 400px;
+        flex: 1;
+        
+        :deep(.el-input__wrapper) {
+          background: white;
+          border-radius: 10px;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+          transition: all 0.3s;
+          
+          &:hover {
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+          }
+          
+          &.is-focus {
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+          }
+        }
       }
       
       .action-buttons {
         display: flex;
-        gap: 10px;
+        gap: 8px;
         
-        .is-loading {
-          animation: rotate 1s linear infinite;
+        .el-button {
+          border-radius: 8px;
+          font-weight: 500;
+          height: 36px;
+          padding: 0 16px;
+          font-size: 13px;
+          transition: all 0.3s ease;
+          
+          &.add-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            box-shadow: 0 2px 6px rgba(102, 126, 234, 0.25);
+            
+            &:hover {
+              opacity: 0.92;
+              transform: translateY(-1px);
+              box-shadow: 0 4px 10px rgba(102, 126, 234, 0.35);
+            }
+            
+            .el-icon {
+              margin-right: 4px;
+              font-size: 14px;
+            }
+          }
+          
+          &.refresh-btn {
+            .el-icon {
+              margin-right: 6px;
+              
+              &.is-loading {
+                animation: rotate 1s linear infinite;
+              }
+            }
+          }
         }
       }
     }
@@ -553,5 +1116,75 @@ onMounted(() => {
   margin-bottom: 8px; /* 增加底部间距 */
   display: block;
   font-weight: 500;
+}
+
+// 表格样式优化
+:deep(.el-table) {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  
+  .el-table__header {
+    th {
+      background: linear-gradient(135deg, #f8f9ff 0%, #f5f7ff 100%);
+      color: #64748b;
+      font-weight: 600;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 16px 12px;
+      border-bottom: 2px solid rgba(102, 126, 234, 0.1);
+    }
+  }
+  
+  .el-table__body {
+    tr {
+      transition: all 0.2s ease;
+      
+      &:hover {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.01) 100%);
+      }
+      
+      td {
+        padding: 14px 12px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+      }
+    }
+    
+    .el-button {
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      transition: all 0.3s ease;
+      
+      &.el-button--primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        
+        &:hover {
+          opacity: 0.9;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+      }
+      
+      &.el-button--danger {
+        &:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+      }
+    }
+  }
+}
+
+// 全局动画
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 </style>

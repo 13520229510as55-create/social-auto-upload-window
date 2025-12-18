@@ -1,0 +1,18 @@
+[Unit]
+Description=Social Auto Upload Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/social-auto-upload
+Environment="PATH=/opt/social-auto-upload/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/opt/social-auto-upload/venv/bin/python3 /opt/social-auto-upload/sau_backend.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/social-auto-upload/logs/backend.log
+StandardError=append:/opt/social-auto-upload/logs/backend.error.log
+
+[Install]
+WantedBy=multi-user.target
+

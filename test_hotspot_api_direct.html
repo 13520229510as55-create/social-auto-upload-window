@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试公众号监测API</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>公众号监测API测试页面</h1>
+    <button onclick="testAddAccount()">测试添加号主</button>
+    <button onclick="testGetAccounts()">测试获取号主列表</button>
+    <div id="result"></div>
+
+    <script>
+        // 解析API基础URL
+        const resolveApiBaseUrl = () => {
+            const hostname = window.location.hostname
+            console.log('检测到hostname:', hostname)
+            
+            if (hostname === 'yutt.xyz' || hostname === 'www.yutt.xyz' || hostname.includes('yutt.xyz')) {
+                console.log('使用yutt.xyz域名，设置API_BASE_URL为 /api')
+                return '/api'
+            } else {
+                console.log('使用其他域名，设置API_BASE_URL为 http://150.107.38.113:5409')
+                return 'http://150.107.38.113:5409'
+            }
+        }
+
+        const apiBaseUrl = resolveApiBaseUrl()
+        console.log('最终API Base URL:', apiBaseUrl)
+
+        async function testAddAccount() {
+            const mediaId = 'MzA4Nzg0MDM5Nw=='
+            const url = `${apiBaseUrl}/hotspot/wechat/accounts`
+            
+            console.log('发送POST请求到:', url)
+            console.log('完整URL:', url)
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        media_id: mediaId
+                    })
+                })
+                
+                console.log('响应状态码:', response.status)
+                console.log('响应URL:', response.url)
+                
+                const result = await response.json()
+                document.getElementById('result').innerHTML = `
+                    <h3>响应结果:</h3>
+                    <p>状态码: ${response.status}</p>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                `
+            } catch (error) {
+                console.error('请求失败:', error)
+                document.getElementById('result').innerHTML = `
+                    <h3>错误:</h3>
+                    <p>${error.message}</p>
+                `
+            }
+        }
+
+        async function testGetAccounts() {
+            const url = `${apiBaseUrl}/hotspot/wechat/accounts`
+            
+            console.log('发送GET请求到:', url)
+            
+            try {
+                const response = await fetch(url)
+                const result = await response.json()
+                document.getElementById('result').innerHTML = `
+                    <h3>响应结果:</h3>
+                    <p>状态码: ${response.status}</p>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                `
+            } catch (error) {
+                console.error('请求失败:', error)
+                document.getElementById('result').innerHTML = `
+                    <h3>错误:</h3>
+                    <p>${error.message}</p>
+                `
+            }
+        }
+    </script>
+</body>
+</html>
+
+

@@ -119,3 +119,15 @@ body {
 .pr-4 { padding-right: $spacing-lg; }
 .pb-4 { padding-bottom: $spacing-lg; }
 .pl-4 { padding-left: $spacing-lg; }
+
+// Prose 博客区域样式
+.prose.prose--block.prose--blog {
+  p {
+    margin-top: 20px;
+    
+    // 第一个段落宽度调整
+    &:first-child {
+      width: 456px;
+    }
+  }
+}
