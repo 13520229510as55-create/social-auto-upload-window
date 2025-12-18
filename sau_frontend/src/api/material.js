@@ -55,14 +55,18 @@ export const materialApi = {
   // 上传到谷歌存储（使用Google Cloud Storage API分步上传）
   uploadToGoogleStorage: async function(file, filename, accessToken, onUploadProgress) {
     const bucketName = 'n8n-test-3344'
-    // accessToken 现在作为参数传入，如果没有传入则使用默认值（向后兼容）
+    // accessToken 现在作为参数传入，如果没有传入则从环境变量读取
     if (!accessToken || typeof accessToken === 'function') {
       // 如果第二个参数是函数，说明是旧版本调用（没有传 token）
       if (typeof accessToken === 'function') {
         onUploadProgress = accessToken
-        accessToken = 'ya29.a0Aa7pCA_V4-alvb6WzH1DT_kZztIq_Fk6FToWE0C804MnQAUwFTwRkBGLzuS3d8PgPE_UfgXLm5TjkntyVrts_iXoKGIzTzVockMZUhSVc7X5EqSTjRFLH_VamWi2bSvdhQg22t-oazXAk_UTALkdog17Q9X4JhFruiDxDWkWGap8P8DTVtWSc4NPADcxJUCYkpCvIVPhoH5XWwaCgYKATsSARESFQHGX2MidZLOwXozR7IrP8OU45RkWw0213'
+        accessToken = null
       } else {
-        accessToken = 'ya29.a0Aa7pCA_V4-alvb6WzH1DT_kZztIq_Fk6FToWE0C804MnQAUwFTwRkBGLzuS3d8PgPE_UfgXLm5TjkntyVrts_iXoKGIzTzVockMZUhSVc7X5EqSTjRFLH_VamWi2bSvdhQg22t-oazXAk_UTALkdog17Q9X4JhFruiDxDWkWGap8P8DTVtWSc4NPADcxJUCYkpCvIVPhoH5XWwaCgYKATsSARESFQHGX2MidZLOwXozR7IrP8OU45RkWw0213'
+        accessToken = null
+      }
+      // 从环境变量读取 token（如果存在）
+      if (!accessToken) {
+        accessToken = import.meta.env.VITE_GOOGLE_OAUTH_TOKEN || ''
       }
     }
     

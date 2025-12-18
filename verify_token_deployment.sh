@@ -7,11 +7,11 @@ echo "验证 GCS Token 部署状态"
 echo "=========================================="
 echo ""
 
-# 新 token (应该使用的)
-NEW_TOKEN="ya29.a0Aa7pCA_V4-alvb6WzH1DT_kZztIq_Fk6FToWE0C804MnQAUwFTwRkBGLzuS3d8PgPE_UfgXLm5TjkntyVrts_iXoKGIzTzVockMZUhSVc7X5EqSTjRFLH_VamWi2bSvdhQg22t-oazXAk_UTALkdog17Q9X4JhFruiDxDWkWGap8P8DTVtWSc4NPADcxJUCYkpCvIVPhoH5XWwaCgYKATsSARESFQHGX2MidZLOwXozR7IrP8OU45RkWw0213"
+# 新 token (应该使用的) - 从环境变量读取
+NEW_TOKEN="${GOOGLE_OAUTH_TOKEN:-}"
 
-# 浏览器实际使用的 token (不应该使用的)
-BROWSER_TOKEN="ya29.a0ATi6K2sCH1Pm5TNQYQHnFmrCKZqPe8qO7gwrETHPT2_K_SgutA6_Hkvyab2JGdSvxL6XbMMa3DJLo2yHvhRLe1mbZNtWX2BgILHDm53MU0srxMBROvAwtQbPswmBTMtx1i49bkuDI6ZhZ2fBm5guS7QC4ELPWj9CIB7YSojzNjh4a1qPv7J6l-yDKTggl0TMsarMUnYh0ZB4aCgYKAdMSARESFQHGX2Mio37MSZuC5VasgHFL_UC0Ww0211"
+# 浏览器实际使用的 token (不应该使用的) - 从环境变量读取
+BROWSER_TOKEN="${GOOGLE_OAUTH_TOKEN_BROWSER:-}"
 
 echo "1. 检查本地文件..."
 LOCAL_TOKEN=$(grep -o "ya29\.[^']*" sau_frontend/src/api/material.js | head -1)
