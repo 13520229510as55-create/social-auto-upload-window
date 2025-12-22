@@ -50,7 +50,12 @@ request.interceptors.response.use(
   (response) => {
     const { data } = response
     
-    // 根据后端接口规范处理响应
+    // 爬虫管理 API 直接返回数据，不需要 code 判断
+    if (response.config.url && response.config.url.includes('/crawler')) {
+      return data
+    }
+    
+    // 根据后端接口规范处理响应（其他 API）
     if (data.code === 200 || data.success) {
       return data
     } else {

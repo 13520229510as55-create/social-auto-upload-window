@@ -27,6 +27,7 @@
           <el-menu
             :router="true"
             :default-active="activeMenu"
+            :default-openeds="defaultOpenedMenus"
             :collapse="isCollapse"
             :collapse-transition="false"
             class="sidebar-menu"
@@ -39,40 +40,105 @@
               </template>
             </el-menu-item>
             
+            <!-- 账号管理已移动到发布中心 > 配置管理，暂时隐藏 -->
+            <!--
             <el-menu-item index="/account-management">
               <el-icon><User /></el-icon>
               <template #title>
                 <span>账号管理</span>
               </template>
             </el-menu-item>
+            -->
             
-            <el-menu-item index="/material-management">
-              <el-icon><Picture /></el-icon>
+            <!-- 爬虫管理菜单（手风琴展开） -->
+            <el-sub-menu index="/crawler">
               <template #title>
-                <span>素材管理</span>
+                <el-icon><Grid /></el-icon>
+                <span>爬虫管理</span>
               </template>
-            </el-menu-item>
-            
-            <el-menu-item index="/hotspot-center">
-              <el-icon><TrendCharts /></el-icon>
-              <template #title>
+              
+              <!-- 总览（一级菜单项，直接显示） -->
+              <el-menu-item index="/crawler/dashboard">
+                <el-icon><Odometer /></el-icon>
+                <span>总览</span>
+              </el-menu-item>
+              
+              <!-- 配置管理（二级菜单） -->
+              <el-menu-item index="/crawler/config">
+                <el-icon><Setting /></el-icon>
+                <span>配置管理</span>
+              </el-menu-item>
+              
+              <!-- 任务管理（二级菜单） -->
+              <el-menu-item index="/crawler/tasks">
+                <el-icon><VideoPlay /></el-icon>
+                <span>任务管理</span>
+              </el-menu-item>
+              
+              <!-- 数据列表（二级菜单） -->
+              <el-menu-item index="/crawler/data">
+                <el-icon><DataBoard /></el-icon>
+                <span>数据列表</span>
+              </el-menu-item>
+              
+              <!-- 热点中心（二级菜单，最后一个） -->
+              <el-menu-item index="/crawler/hotspot-center">
+                <el-icon><TrendCharts /></el-icon>
                 <span>热点中心</span>
-              </template>
-            </el-menu-item>
+              </el-menu-item>
+            </el-sub-menu>
             
-            <el-menu-item index="/production-center">
-              <el-icon><Tools /></el-icon>
+            <!-- 制作中心菜单（手风琴展开） -->
+            <el-sub-menu index="/production">
               <template #title>
+                <el-icon><Tools /></el-icon>
                 <span>制作中心</span>
               </template>
-            </el-menu-item>
+              
+              <!-- 总览（一级菜单项，直接显示） -->
+              <el-menu-item index="/production/overview">
+                <el-icon><Odometer /></el-icon>
+                <span>总览</span>
+              </el-menu-item>
+              
+              <!-- 素材管理（二级菜单） -->
+              <el-menu-item index="/production/materials">
+                <el-icon><Picture /></el-icon>
+                <span>素材管理</span>
+              </el-menu-item>
+              
+              <!-- 数据列表（二级菜单） -->
+              <el-menu-item index="/production/data">
+                <el-icon><DataBoard /></el-icon>
+                <span>数据列表</span>
+              </el-menu-item>
+            </el-sub-menu>
             
-            <el-menu-item index="/publish-center">
-              <el-icon><Upload /></el-icon>
+            <!-- 发布中心菜单（手风琴展开） -->
+            <el-sub-menu index="/publish">
               <template #title>
+                <el-icon><Upload /></el-icon>
                 <span>发布中心</span>
               </template>
-            </el-menu-item>
+              
+              <!-- 总览（一级菜单项，直接显示） -->
+              <el-menu-item index="/publish/overview">
+                <el-icon><Odometer /></el-icon>
+                <span>总览</span>
+              </el-menu-item>
+              
+              <!-- 配置管理（二级菜单） -->
+              <el-menu-item index="/publish/config">
+                <el-icon><Setting /></el-icon>
+                <span>配置管理</span>
+              </el-menu-item>
+              
+              <!-- 数据列表（二级菜单） -->
+              <el-menu-item index="/publish/data-list">
+                <el-icon><DataBoard /></el-icon>
+                <span>数据列表</span>
+              </el-menu-item>
+            </el-sub-menu>
             
             <el-menu-item index="/website">
               <el-icon><Monitor /></el-icon>
@@ -153,7 +219,8 @@ import {
   HomeFilled, User, Monitor, DataAnalysis, 
   Fold, Picture, Upload, ArrowDown, SwitchButton,
   DArrowLeft, DArrowRight, VideoCamera, Promotion,
-  Odometer, UserFilled, FolderOpened, Tools, TrendCharts
+  Odometer, UserFilled, FolderOpened, Tools, TrendCharts,
+  Grid, Setting, VideoPlay, DataBoard
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 
@@ -166,10 +233,65 @@ const isLoginPage = computed(() => {
   return route.path === '/login'
 })
 
+// 默认展开的子菜单
+const defaultOpenedMenus = computed(() => {
+  const path = route.path || route.fullPath.replace(/#/g, '')
+  const opened = []
+  if (path.startsWith('/crawler/')) {
+    opened.push('/crawler')
+  }
+  if (path.startsWith('/publish/')) {
+    opened.push('/publish')
+  }
+  if (path.startsWith('/production/')) {
+    opened.push('/production')
+  }
+  return opened
+})
+
 // 当前激活的菜单项
 const activeMenu = computed(() => {
   // 确保路由路径正确匹配，包括 hash 模式
-  const path = route.path || route.fullPath.replace(/#/g, '')
+  let path = route.path || route.fullPath.replace(/#/g, '')
+  // 处理爬虫管理路由，确保子路由也能正确激活父菜单
+  if (path.startsWith('/crawler/')) {
+    // 对于子路由，返回父路由路径以激活父菜单
+    if (path !== '/crawler/dashboard' && path !== '/crawler/config' && path !== '/crawler/tasks' && path !== '/crawler/data' && path !== '/crawler/hotspot-center') {
+      // 带参数的路由，提取基础路径
+      if (path.startsWith('/crawler/config/')) {
+        return '/crawler/config'
+      }
+      if (path.startsWith('/crawler/data/')) {
+        return '/crawler/data'
+      }
+    }
+  }
+  // 处理制作中心路由，确保子路由也能正确激活父菜单
+  if (path.startsWith('/production/')) {
+    // 对于子路由，返回父路由路径以激活父菜单
+    if (path !== '/production/overview' && path !== '/production/materials' && path !== '/production/data') {
+      // 带参数的路由，提取基础路径
+      if (path.startsWith('/production/materials/')) {
+        return '/production/materials'
+      }
+      if (path.startsWith('/production/data/')) {
+        return '/production/data'
+      }
+    }
+  }
+  // 处理发布中心路由，确保子路由也能正确激活父菜单
+  if (path.startsWith('/publish/')) {
+    // 对于子路由，返回父路由路径以激活父菜单
+    if (path !== '/publish/overview' && path !== '/publish/config' && path !== '/publish/data-list') {
+      // 带参数的路由，提取基础路径
+      if (path.startsWith('/publish/config/')) {
+        return '/publish/config'
+      }
+      if (path.startsWith('/publish/data-list/')) {
+        return '/publish/data-list'
+      }
+    }
+  }
   return path
 })
 
@@ -191,8 +313,27 @@ const getPageTitle = (path) => {
     '/material-management': '素材管理',
     '/publish-center': '发布中心',
     '/production-center': '制作中心',
-    '/hotspot-center': '热点中心'
+    '/hotspot-center': '热点中心',
+    '/crawler/dashboard': '爬虫总览',
+    '/crawler/config': '配置管理',
+    '/crawler/tasks': '任务管理',
+    '/crawler/data': '数据列表',
+    '/crawler/hotspot-center': '热点中心',
+    '/publish/overview': '发布中心总览',
+    '/publish/config': '配置管理',
+    '/publish/data-list': '数据列表',
+    '/production/overview': '制作中心总览',
+    '/production/materials': '素材管理',
+    '/production/data': '数据列表'
   }
+  // 处理带参数的路由
+  if (path.startsWith('/crawler/config')) return '配置管理'
+  if (path.startsWith('/crawler/data')) return '数据列表'
+  if (path.startsWith('/crawler/hotspot-center')) return '热点中心'
+  if (path.startsWith('/publish/config')) return '配置管理'
+  if (path.startsWith('/publish/data-list')) return '数据列表'
+  if (path.startsWith('/production/materials')) return '素材管理'
+  if (path.startsWith('/production/data')) return '数据列表'
   return titleMap[path] || null
 }
 
@@ -206,8 +347,27 @@ const getPageIcon = (path) => {
     '/material-management': FolderOpened,
     '/publish-center': Promotion,
     '/production-center': Tools,
-    '/hotspot-center': TrendCharts
+    '/hotspot-center': TrendCharts,
+    '/crawler/dashboard': Odometer,
+    '/crawler/config': Setting,
+    '/crawler/tasks': VideoPlay,
+    '/crawler/data': DataBoard,
+    '/crawler/hotspot-center': TrendCharts,
+    '/publish/overview': Odometer,
+    '/publish/config': Setting,
+    '/publish/data-list': DataBoard,
+    '/production/overview': Odometer,
+    '/production/materials': Picture,
+    '/production/data': DataBoard
   }
+  // 处理带参数的路由
+  if (path.startsWith('/crawler/config')) return Setting
+  if (path.startsWith('/crawler/data')) return DataBoard
+  if (path.startsWith('/crawler/hotspot-center')) return TrendCharts
+  if (path.startsWith('/publish/config')) return Setting
+  if (path.startsWith('/publish/data-list')) return DataBoard
+  if (path.startsWith('/production/materials')) return Picture
+  if (path.startsWith('/production/data')) return DataBoard
   return iconMap[path] || null
 }
 
@@ -442,6 +602,138 @@ const handleCommand = async (command) => {
           
           span {
             font-weight: 600;
+          }
+        }
+      }
+      
+      // 子菜单样式
+      :deep(.el-sub-menu) {
+        margin-bottom: 4px;
+        
+        .el-sub-menu__title {
+          height: 48px;
+          line-height: 48px;
+          border-radius: 10px;
+          color: rgba(255, 255, 255, 0.85);
+          background: transparent;
+          transition: all 0.3s ease;
+          position: relative;
+          overflow: hidden;
+          
+          &::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transform: scaleY(0);
+            transition: transform 0.3s ease;
+          }
+          
+          .el-icon {
+            font-size: 20px;
+            color: rgba(255, 255, 255, 0.7);
+            transition: all 0.3s ease;
+          }
+          
+          span {
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+          }
+          
+          &:hover {
+            background: rgba(102, 126, 234, 0.15);
+            color: #fff;
+            
+            .el-icon {
+              color: #667eea;
+              transform: scale(1.1);
+            }
+          }
+        }
+        
+        // 子菜单打开状态
+        &.is-opened {
+          > .el-sub-menu__title {
+            background: rgba(102, 126, 234, 0.1);
+            color: #fff;
+            
+            .el-icon {
+              color: #667eea;
+            }
+          }
+        }
+        
+        // 子菜单项样式（继承父级样式）
+        .el-menu {
+          background: transparent;
+          
+          .el-menu-item {
+            height: 48px;
+            line-height: 48px;
+            margin-bottom: 4px;
+            border-radius: 10px;
+            color: rgba(255, 255, 255, 0.85);
+            background: transparent;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            padding-left: 48px !important;
+            
+            &::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              top: 0;
+              bottom: 0;
+              width: 3px;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              transform: scaleY(0);
+              transition: transform 0.3s ease;
+            }
+            
+            .el-icon {
+              font-size: 20px;
+              color: rgba(255, 255, 255, 0.7);
+              transition: all 0.3s ease;
+            }
+            
+            span {
+              font-size: 14px;
+              font-weight: 500;
+              transition: all 0.3s ease;
+            }
+            
+            &:hover {
+              background: rgba(102, 126, 234, 0.15);
+              color: #fff;
+              
+              .el-icon {
+                color: #667eea;
+                transform: scale(1.1);
+              }
+            }
+            
+            &.is-active {
+              background: linear-gradient(90deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.15) 100%);
+              color: #fff;
+              box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+              
+              &::before {
+                transform: scaleY(1);
+              }
+              
+              .el-icon {
+                color: #667eea;
+              }
+              
+              span {
+                font-weight: 600;
+              }
+            }
           }
         }
       }

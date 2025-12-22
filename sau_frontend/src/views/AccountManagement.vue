@@ -522,6 +522,23 @@
             <el-icon><CircleCloseFilled /></el-icon>
             <span>添加失败，请稍后再试</span>
           </div>
+          <!-- 实时日志显示区域（仅小红书显示） -->
+          <div v-if="accountForm.platform === '小红书' && loginLogs.length > 0" class="login-logs-wrapper">
+            <div class="login-logs-header">
+              <el-icon><Document /></el-icon>
+              <span>登录日志</span>
+            </div>
+            <div class="login-logs-content">
+              <div 
+                v-for="(log, index) in loginLogs" 
+                :key="index" 
+                class="login-log-item"
+              >
+                <span class="log-time">{{ log.time }}</span>
+                <span class="log-message">{{ log.message }}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </el-form>
       <template #footer>
@@ -546,7 +563,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 
 // 验证定时器（用于清理）
 let validationTimer = null
-import { Refresh, CircleCheckFilled, CircleCloseFilled, Download, Upload, Loading, Plus, UserFilled, Edit, Delete, Search, Link, Clock } from '@element-plus/icons-vue'
+import { Refresh, CircleCheckFilled, CircleCloseFilled, Download, Upload, Loading, Plus, UserFilled, Edit, Delete, Search, Link, Clock, Document } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { accountApi } from '@/api/account'
 import { useAccountStore } from '@/stores/account'
@@ -951,6 +968,7 @@ const currentLoginPlatform = ref('') // 当前登录的平台
 const currentLoginName = ref('') // 当前登录的账号名
 const addingAccountDirect = ref(false) // 直接添加账号的loading状态
 const manualConfirming = ref(false) // 手动确认登录状态
+const loginLogs = ref([]) // 登录实时日志
 
 /**
  * 添加账号
@@ -973,6 +991,7 @@ const handleAddAccount = (contentType) => {
   sseConnecting.value = false
   qrCodeData.value = ''
   loginStatus.value = ''
+  loginLogs.value = [] // 清空日志
   dialogVisible.value = true
 }
 
@@ -1157,6 +1176,7 @@ const handleReLogin = (row) => {
   sseConnecting.value = false
   qrCodeData.value = ''
   loginStatus.value = ''
+  loginLogs.value = [] // 清空日志
 
   // 显示对话框
   dialogVisible.value = true
@@ -1392,6 +1412,15 @@ const connectSSE = (platform, name, automationTool = 'playwright') => {
     if (data.startsWith('status:')) {
       const statusMsg = data.replace('status:', '')
       console.log('[前端] 收到状态消息:', statusMsg)
+      // 添加到日志列表
+      loginLogs.value.push({
+        time: new Date().toLocaleTimeString(),
+        message: statusMsg
+      })
+      // 保持日志列表最多50条
+      if (loginLogs.value.length > 50) {
+        loginLogs.value.shift()
+      }
       return
     }
 
@@ -1899,6 +1928,64 @@ onBeforeUnmount(() => {
     
     .error-wrapper .el-icon {
       color: #f56c6c;
+    }
+    
+    // 登录日志样式
+    .login-logs-wrapper {
+      margin-top: 20px;
+      width: 100%;
+      max-width: 500px;
+      border: 1px solid #e4e7ed;
+      border-radius: 8px;
+      background: #f8f9fa;
+      overflow: hidden;
+      
+      .login-logs-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        background: #fff;
+        border-bottom: 1px solid #e4e7ed;
+        font-weight: 600;
+        font-size: 14px;
+        color: #303133;
+        
+        .el-icon {
+          color: #409eff;
+        }
+      }
+      
+      .login-logs-content {
+        max-height: 200px;
+        overflow-y: auto;
+        padding: 8px;
+        
+        .login-log-item {
+          display: flex;
+          gap: 12px;
+          padding: 6px 8px;
+          font-size: 12px;
+          line-height: 1.5;
+          border-bottom: 1px solid #f0f0f0;
+          
+          &:last-child {
+            border-bottom: none;
+          }
+          
+          .log-time {
+            color: #909399;
+            min-width: 70px;
+            flex-shrink: 0;
+          }
+          
+          .log-message {
+            color: #606266;
+            flex: 1;
+            word-break: break-word;
+          }
+        }
+      }
     }
   }
   

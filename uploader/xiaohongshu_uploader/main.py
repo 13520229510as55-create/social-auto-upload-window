@@ -122,11 +122,11 @@ class XiaoHongShuVideo(object):
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
-        await page.goto("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=video")
+        await page.goto("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=video", timeout=60000)
         xiaohongshu_logger.info(f'[+]正在上传-------{self.title}.mp4')
         # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
         xiaohongshu_logger.info(f'[-] 正在打开主页...')
-        await page.wait_for_url("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=video")
+        await page.wait_for_url("https://creator.xiaohongshu.com/publish/publish?from=homepage&target=video", timeout=60000)
         # 点击 "上传视频" 按钮
         await page.locator("div[class^='upload-content'] input[class='upload-input']").set_input_files(self.file_path)
 

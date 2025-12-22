@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
 import asyncio
 import os
+import sys
 import sqlite3
 import threading
 import time
@@ -12,6 +14,23 @@ from flask_cors import CORS
 from myUtils.auth import check_cookie
 from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from conf import BASE_DIR
+
+# Windows 系统设置 UTF-8 编码输出
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        # Python < 3.7 不支持 reconfigure
+        import codecs
+        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+        sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
+try:
+    from conf import HTTP_PROXY, HTTPS_PROXY
+except ImportError:
+    # 兼容旧版本 conf.py（没有代理配置）
+    HTTP_PROXY = ''
+    HTTPS_PROXY = ''
 from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
 from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs, post_image_text_xhs
 from urllib.parse import urlparse
@@ -34,6 +53,16 @@ app = Flask(__name__)
 #允许所有来源跨域访问
 CORS(app)
 
+# 注册 MediaCrawler 爬虫管理蓝图
+try:
+    from crawler_api import crawler_bp
+    app.register_blueprint(crawler_bp)
+    print("✓ MediaCrawler 爬虫管理蓝图已注册")
+except ImportError as e:
+    print(f"⚠️ MediaCrawler 爬虫管理蓝图注册失败: {e}")
+except Exception as e:
+    print(f"⚠️ MediaCrawler 爬虫管理蓝图注册出错: {e}")
+
 # 启动 Cookie 自动刷新定时任务（在应用初始化时启动）
 def start_cookie_refresh_scheduler():
     """
@@ -47,7 +76,7 @@ def start_cookie_refresh_scheduler():
         # 每 2 小时执行一次
         schedule.every(2).hours.do(run_cookie_refresh_task)
         
-        print(f"🔄 [{get_china_time()}] Cookie 自动刷新定时任务已启动（每 2 小时执行一次）", flush=True)
+        print(f"[INFO] [{get_china_time()}] Cookie 自动刷新定时任务已启动（每 2 小时执行一次）", flush=True)
         
         def run_scheduler():
             """在后台线程中运行定时任务"""
@@ -58,10 +87,13 @@ def start_cookie_refresh_scheduler():
         # 启动后台线程
         scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
         scheduler_thread.start()
-        print(f"✅ Cookie 刷新定时任务线程已启动", flush=True)
+        print(f"[INFO] Cookie 刷新定时任务线程已启动", flush=True)
         
+    except ImportError as e:
+        # 模块不存在时，静默跳过（可选功能）
+        print(f"[WARNING] Cookie 刷新模块未找到，跳过定时任务: {str(e)}", flush=True)
     except Exception as e:
-        print(f"⚠️  启动 Cookie 刷新定时任务失败: {str(e)}", flush=True)
+        print(f"[WARNING] 启动 Cookie 刷新定时任务失败: {str(e)}", flush=True)
         import traceback
         traceback.print_exc()
 
@@ -3642,12 +3674,13 @@ def login():
     response.headers['Access-Control-Allow-Headers'] = 'Cache-Control'
     return response
 
-def download_video_from_url(url, output_dir=None):
+def download_video_from_url(url, output_dir=None, max_retries=3):
     """
-    从URL下载视频到本地
+    从URL下载视频到本地（带重试机制）
     Args:
         url: 视频URL（如谷歌云存储链接）
         output_dir: 输出目录，默认为 videoFile 目录
+        max_retries: 最大重试次数，默认3次
     Returns:
         下载后的本地文件名（相对于videoFile目录）
     """
@@ -3657,9 +3690,6 @@ def download_video_from_url(url, output_dir=None):
         output_dir = Path(output_dir)
     
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    try:
-        print(f"📥 开始从URL下载视频: {url}")
         
         # 从URL中提取文件名
         parsed_url = urlparse(url)
@@ -3676,9 +3706,81 @@ def download_video_from_url(url, output_dir=None):
         local_filename = f"{uuid_v1}_{url_filename}"
         local_filepath = output_dir / local_filename
         
-        # 下载文件
+    # 设置请求头，模拟浏览器请求
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Cache-Control': 'no-cache',
+        'Range': 'bytes=0-',  # 支持断点续传
+    }
+    
+    # 重试机制
+    for attempt in range(max_retries):
+        try:
+            print(f"📥 开始从URL下载视频 (尝试 {attempt + 1}/{max_retries}): {url}")
+            
+            # 创建会话以保持连接，配置重试和连接池
+            from requests.adapters import HTTPAdapter
+            from urllib3.util.retry import Retry
+            import urllib3
+            
+            # 禁用 SSL 警告（因为国内服务器访问 Google 服务可能需要禁用 SSL 验证）
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            
+            session = requests.Session()
+            session.headers.update(headers)
+            
+            # 配置代理（用于访问 Google 服务）
+            proxies = {}
+            if HTTP_PROXY or HTTPS_PROXY:
+                if HTTP_PROXY:
+                    proxies['http'] = HTTP_PROXY
+                if HTTPS_PROXY:
+                    proxies['https'] = HTTPS_PROXY
+                elif HTTP_PROXY:
+                    # 如果只设置了 HTTP_PROXY，HTTPS 也使用它
+                    proxies['https'] = HTTP_PROXY
+                if proxies:
+                    print(f"🌐 使用代理: {proxies}")
+                    session.proxies = proxies
+            else:
+                print("⚠️ 未配置代理，将尝试直接连接（可能失败）")
+            
+            # 配置重试策略
+            retry_strategy = Retry(
+                total=3,
+                backoff_factor=1,
+                status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods=["GET", "HEAD"]
+            )
+            adapter = HTTPAdapter(
+                max_retries=retry_strategy,
+                pool_connections=10,
+                pool_maxsize=10
+            )
+            session.mount("http://", adapter)
+            session.mount("https://", adapter)
+            
+            # 下载文件（增加超时时间，使用连接池）
         print(f"📥 下载中: {url} -> {local_filepath}")
-        response = requests.get(url, stream=True, timeout=300)  # 5分钟超时
+            
+            # 对于 Google Cloud Storage 或国内服务器，默认禁用 SSL 验证
+            # 因为国内服务器访问 Google 服务经常遇到 SSL/网络问题
+            verify_ssl = False  # 默认禁用 SSL 验证，避免网络问题
+            if 'storage.googleapis.com' in url or 'googleapis.com' in url:
+                print("⚠️ 检测到 Google Cloud Storage URL，使用禁用 SSL 验证模式（国内服务器访问需要）")
+                verify_ssl = False
+            
+            response = session.get(
+                url, 
+                stream=True, 
+                timeout=(60, 900),  # (连接超时60秒, 读取超时900秒=15分钟)
+                allow_redirects=True,
+                verify=verify_ssl
+            )
         response.raise_for_status()
         
         # 获取文件大小
@@ -3686,25 +3788,123 @@ def download_video_from_url(url, output_dir=None):
         if total_size > 0:
             print(f"📦 文件大小: {total_size / (1024*1024):.2f} MB")
         
-        # 写入文件
+            # 写入文件（使用更大的chunk size以提高下载速度）
         downloaded_size = 0
+            chunk_size = 64 * 1024  # 64KB chunks
+            
         with open(local_filepath, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
+                for chunk in response.iter_content(chunk_size=chunk_size):
                 if chunk:
                     f.write(chunk)
                     downloaded_size += len(chunk)
                     if total_size > 0:
                         progress = (downloaded_size / total_size) * 100
-                        if downloaded_size % (10 * 1024 * 1024) == 0:  # 每10MB打印一次
+                            # 每10MB打印一次进度
+                            if downloaded_size % (10 * 1024 * 1024) < chunk_size:
                             print(f"📥 下载进度: {progress:.1f}% ({downloaded_size / (1024*1024):.2f} MB / {total_size / (1024*1024):.2f} MB)")
         
+            # 验证文件是否完整下载
+            if total_size > 0 and downloaded_size != total_size:
+                raise Exception(f"文件下载不完整: 已下载 {downloaded_size} 字节，期望 {total_size} 字节")
+            
         print(f"✅ 视频下载完成: {local_filename} ({downloaded_size / (1024*1024):.2f} MB)")
+            session.close()
         return local_filename
+            
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, 
+                ConnectionResetError, requests.exceptions.ChunkedEncodingError,
+                requests.exceptions.SSLError) as e:
+            # 连接相关错误，可以重试
+            error_msg = str(e)
+            error_type = type(e).__name__
+            print(f"⚠️ 下载失败 (尝试 {attempt + 1}/{max_retries}): {error_type}: {error_msg}")
+            
+            # 检查是否是 ProtocolError（来自 urllib3）
+            is_protocol_error = 'ProtocolError' in error_msg or '10054' in error_msg or 'ConnectionResetError' in error_msg
+            
+            # 如果是 SSL 错误或协议错误，最后一次尝试时禁用 SSL 验证
+            if attempt == max_retries - 1 and (is_protocol_error or 'SSL' in error_msg or 'ssl' in error_msg.lower()):
+                print(f"🔄 最后一次尝试：禁用 SSL 验证...")
+                try:
+                    # 禁用 SSL 警告
+                    import urllib3
+                    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                    
+                    session = requests.Session()
+                    session.headers.update(headers)
+                    # 配置代理（如果设置了）
+                    proxies = {}
+                    if HTTP_PROXY or HTTPS_PROXY:
+                        if HTTP_PROXY:
+                            proxies['http'] = HTTP_PROXY
+                        if HTTPS_PROXY:
+                            proxies['https'] = HTTPS_PROXY
+                        elif HTTP_PROXY:
+                            proxies['https'] = HTTP_PROXY
+                    if proxies:
+                        session.proxies = proxies
+                    response = session.get(
+                        url, 
+                        stream=True, 
+                        timeout=(60, 900),
+                        allow_redirects=True,
+                        verify=False  # 禁用 SSL 验证（仅作为最后手段）
+                    )
+                    response.raise_for_status()
+                    
+                    # 继续下载流程
+                    total_size = int(response.headers.get('content-length', 0))
+                    if total_size > 0:
+                        print(f"📦 文件大小: {total_size / (1024*1024):.2f} MB")
+                    
+                    downloaded_size = 0
+                    chunk_size = 64 * 1024
+                    with open(local_filepath, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=chunk_size):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded_size += len(chunk)
+                    
+                    if total_size > 0 and downloaded_size != total_size:
+                        raise Exception(f"文件下载不完整: 已下载 {downloaded_size} 字节，期望 {total_size} 字节")
+                    
+                    print(f"✅ 视频下载完成: {local_filename} ({downloaded_size / (1024*1024):.2f} MB)")
+                    session.close()
+                    return local_filename
+                except Exception as ssl_e:
+                    print(f"❌ 即使禁用 SSL 验证也失败: {str(ssl_e)}")
+            
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 3  # 递增等待时间：3秒、6秒、9秒
+                print(f"⏳ 等待 {wait_time} 秒后重试...")
+                import time
+                time.sleep(wait_time)
+                # 如果文件已部分下载，删除它以便重新下载
+                if local_filepath.exists():
+                    try:
+                        local_filepath.unlink()
+                        print(f"🗑️ 已删除不完整的文件: {local_filename}")
+                    except:
+                        pass
+                continue
+            else:
+                # 最后一次尝试也失败了
+                print(f"❌ 下载视频失败（已重试 {max_retries} 次）: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                raise Exception(f"从URL下载视频失败（已重试 {max_retries} 次）: {str(e)}")
         
     except Exception as e:
+            # 其他错误，不重试
         print(f"❌ 下载视频失败: {str(e)}")
         import traceback
         traceback.print_exc()
+            # 清理不完整的文件
+            if local_filepath.exists():
+                try:
+                    local_filepath.unlink()
+                except:
+                    pass
         raise Exception(f"从URL下载视频失败: {str(e)}")
 
 
@@ -3820,7 +4020,17 @@ def download_google_storage_file(file_path_or_name, output_dir=None):
             
             # 下载文件
             print(f"📥 下载中: {uri} -> {local_filepath}")
-            response = requests.get(download_url, stream=True, timeout=600)  # 10分钟超时
+            # 配置代理（如果设置了）
+            proxies = {}
+            if HTTP_PROXY or HTTPS_PROXY:
+                if HTTP_PROXY:
+                    proxies['http'] = HTTP_PROXY
+                if HTTPS_PROXY:
+                    proxies['https'] = HTTPS_PROXY
+                elif HTTP_PROXY:
+                    proxies['https'] = HTTP_PROXY
+                print(f"🌐 使用代理下载: {proxies}")
+            response = requests.get(download_url, stream=True, timeout=600, proxies=proxies, verify=False)  # 10分钟超时，禁用SSL验证
             response.raise_for_status()
             
             # 获取文件大小
@@ -4272,13 +4482,13 @@ def run_async_function(type, id, status_queue, browser_context_storage=None, aut
             original_tool = os.environ.get('AUTOMATION_TOOL')
             os.environ['AUTOMATION_TOOL'] = automation_tool
             print(f"[异步任务] 为本次登录设置自动化工具: {automation_tool.upper()}", flush=True)
-
+            
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             # 当前统一使用 Playwright 版本实现，不再依赖 login_wrapper
-            loop.run_until_complete(get_tencent_cookie(id, status_queue))
+                loop.run_until_complete(get_tencent_cookie(id, status_queue))
             loop.close()
-
+            
             # 恢复原来的环境变量
             if original_tool is not None:
                 os.environ['AUTOMATION_TOOL'] = original_tool

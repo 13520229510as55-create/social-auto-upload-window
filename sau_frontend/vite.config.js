@@ -32,11 +32,56 @@ export default defineConfig({
       strict: false
     },
     proxy: {
-      '/api': {
+      // crawler API 保持 /api/crawler 前缀
+      '/api/crawler': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false
+      },
+      // production 和 publish API 需要移除 /api 前缀
+      '/api/production': {
         target: 'http://localhost:5409',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/publish': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      // hotspot API 需要移除 /api 前缀
+      '/api/hotspot': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      // getFiles, getAccounts, getValidAccounts 等需要移除 /api 前缀
+      '/api/getFiles': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/getAccounts': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/getValidAccounts': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      // 其他 /api 路由保持原样
+      '/api': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false
       }
     }
   },

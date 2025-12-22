@@ -1,0 +1,15 @@
+测试总结
+========
+
+后端API服务: ✓ 正常运行在 http://localhost:8000
+前端项目结构: ✓ 完整
+API接口: ✓ 全部可用
+
+已知问题:
+- MediaCrawler主模块需要完整依赖（PIL等）
+- 这不影响API服务，但影响实际爬虫功能
+
+建议:
+1. 安装完整依赖: pip install -r ../requirements.txt
+2. 安装浏览器驱动: playwright install
+3. 启动前端: cd frontend && npm install && npm run dev

@@ -9,6 +9,17 @@ import HotspotCenter from '../views/HotspotCenter.vue'
 import About from '../views/About.vue'
 import Login from '../views/Login.vue'
 
+// 发布中心相关组件
+import PublishOverview from '../views/publish/PublishOverview.vue'
+import PublishConfig from '../views/publish/PublishConfig.vue'
+import PublishDataList from '../views/publish/PublishDataList.vue'
+
+// 爬虫管理相关组件
+import CrawlerDashboard from '../views/crawler/CrawlerDashboard.vue'
+import CrawlerConfig from '../views/crawler/CrawlerConfig.vue'
+import CrawlerTasks from '../views/crawler/CrawlerTasks.vue'
+import CrawlerData from '../views/crawler/CrawlerData.vue'
+
 const routes = [
   {
     path: '/login',
@@ -37,9 +48,47 @@ const routes = [
       title: '账号管理'
     }
   },
+  // 发布中心路由
   {
-    path: '/material-management',
-    name: 'MaterialManagement',
+    path: '/publish/overview',
+    name: 'PublishOverview',
+    component: PublishOverview,
+    meta: {
+      requiresAuth: true,
+      title: '发布中心总览'
+    }
+  },
+  {
+    path: '/publish/config',
+    name: 'PublishConfig',
+    component: PublishConfig,
+    meta: {
+      requiresAuth: true,
+      title: '配置管理'
+    }
+  },
+  {
+    path: '/publish/data-list',
+    name: 'PublishDataList',
+    component: PublishDataList,
+    meta: {
+      requiresAuth: true,
+      title: '数据列表'
+    }
+  },
+  // 制作中心路由
+  {
+    path: '/production/overview',
+    name: 'ProductionOverview',
+    component: () => import('../views/production/ProductionOverview.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '制作中心总览'
+    }
+  },
+  {
+    path: '/production/materials',
+    name: 'ProductionMaterials',
     component: MaterialManagement,
     meta: {
       requiresAuth: true,
@@ -47,30 +96,77 @@ const routes = [
     }
   },
   {
-    path: '/publish-center',
-    name: 'PublishCenter',
-    component: PublishCenter,
-    meta: {
-      requiresAuth: true,
-      title: '发布中心'
-    }
-  },
-  {
-    path: '/production-center',
-    name: 'ProductionCenter',
+    path: '/production/data',
+    name: 'ProductionData',
     component: ProductionCenter,
     meta: {
       requiresAuth: true,
-      title: '制作中心'
+      title: '数据列表'
     }
   },
+  // 保留旧路由以兼容，重定向到新路由
   {
-    path: '/hotspot-center',
+    path: '/material-management',
+    redirect: '/production/materials'
+  },
+  {
+    path: '/publish-center',
+    redirect: '/publish/overview'
+  },
+  {
+    path: '/production-center',
+    redirect: '/production/overview'
+  },
+  // 热点中心已移动到爬虫管理下
+  {
+    path: '/crawler/hotspot-center',
     name: 'HotspotCenter',
     component: HotspotCenter,
     meta: {
       requiresAuth: true,
       title: '热点中心'
+    }
+  },
+  // 保留旧路由以兼容，重定向到新路由
+  {
+    path: '/hotspot-center',
+    redirect: '/crawler/hotspot-center'
+  },
+  // 爬虫管理路由
+  {
+    path: '/crawler/dashboard',
+    name: 'CrawlerDashboard',
+    component: CrawlerDashboard,
+    meta: {
+      requiresAuth: true,
+      title: '爬虫总览'
+    }
+  },
+  {
+    path: '/crawler/config/:platform?',
+    name: 'CrawlerConfig',
+    component: CrawlerConfig,
+    meta: {
+      requiresAuth: true,
+      title: '配置管理'
+    }
+  },
+  {
+    path: '/crawler/tasks',
+    name: 'CrawlerTasks',
+    component: CrawlerTasks,
+    meta: {
+      requiresAuth: true,
+      title: '任务管理'
+    }
+  },
+  {
+    path: '/crawler/data/:platform?',
+    name: 'CrawlerData',
+    component: CrawlerData,
+    meta: {
+      requiresAuth: true,
+      title: '数据列表'
     }
   },
   {
