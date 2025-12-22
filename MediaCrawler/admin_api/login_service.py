@@ -9,7 +9,6 @@ import base64
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 from typing import Dict, Optional
 from datetime import datetime, timedelta
@@ -217,6 +216,18 @@ class LoginService:
             print(f"[LoginService.get_qrcode] 步骤7: 等待页面完全加载（3秒）...")
             await asyncio.sleep(3)  # 等待页面完全加载
             print(f"[LoginService.get_qrcode] ✓ 页面加载等待完成")
+            
+            # 保存初始的web_session值（用于后续比较判断是否真的登录了）
+            no_logged_in_session = ""
+            if platform == "xhs":
+                try:
+                    initial_cookies = await context.cookies()
+                    initial_cookie_dict = {c["name"]: c["value"] for c in initial_cookies}
+                    no_logged_in_session = initial_cookie_dict.get("web_session", "")
+                    print(f"[LoginService.get_qrcode] 保存初始web_session值: {no_logged_in_session[:30] if no_logged_in_session else '(空)'}...")
+                except Exception as e:
+                    print(f"[LoginService.get_qrcode] ⚠️ 获取初始web_session失败: {e}")
+                    no_logged_in_session = ""
             
             # 对于知乎，直接返回页面截图，跳过所有其他处理
             if platform == "zhihu":
@@ -692,17 +703,7 @@ class LoginService:
             
             print(f"[LoginService.get_qrcode] ✓ 成功获取二维码，最终base64长度: {len(base64_qrcode)}")
             
-            # 获取登录前的web_session值（用于后续比较判断是否登录成功）
-            no_logged_in_session = ""
-            try:
-                initial_cookies = await context.cookies()
-                initial_cookie_dict = {c["name"]: c["value"] for c in initial_cookies}
-                no_logged_in_session = initial_cookie_dict.get("web_session", "")
-                print(f"[LoginService.get_qrcode] 登录前的web_session: {no_logged_in_session[:30] if no_logged_in_session else 'None'}...")
-            except Exception as e:
-                print(f"[LoginService.get_qrcode] 获取登录前cookie失败: {e}")
-            
-            # 保存会话信息
+            # 保存会话信息（包括初始的web_session值）
             login_sessions[session_id] = {
                 "platform": platform,
                 "browser": browser,
@@ -712,7 +713,7 @@ class LoginService:
                 "status": "pending",
                 "created_at": datetime.now(),
                 "expires_at": datetime.now() + timedelta(seconds=120),
-                "no_logged_in_session": no_logged_in_session  # 保存登录前的web_session值
+                "no_logged_in_session": no_logged_in_session  # 保存初始web_session值
             }
             
             return {
@@ -777,22 +778,14 @@ class LoginService:
                 
                 if context and page:
                     try:
-                        # 检查页面是否仍然有效
-                        if page.is_closed():
-                            print(f"[LoginService.check_login_status] 页面已关闭，无法检查登录状态")
-                            is_logged_in = False
-                        else:
-                            cookies = await asyncio.wait_for(context.cookies(), timeout=10.0)
-                            cookie_dict = {c["name"]: c["value"] for c in cookies}
-                            no_logged_in_session = session.get("no_logged_in_session", "")
-                            is_logged_in = self._check_platform_login_status(platform, cookie_dict, page, no_logged_in_session)
+                        cookies = await asyncio.wait_for(context.cookies(), timeout=5.0)
+                        cookie_dict = {c["name"]: c["value"] for c in cookies}
+                        is_logged_in = self._check_platform_login_status(platform, cookie_dict, page)
                     except asyncio.TimeoutError:
-                        print(f"[LoginService.check_login_status] 检查过期会话的登录状态超时（10秒）")
+                        print(f"[LoginService.check_login_status] 检查过期会话的登录状态超时")
                         is_logged_in = False
                     except Exception as e:
                         print(f"[LoginService.check_login_status] 检查过期会话的登录状态出错: {e}")
-                        import traceback
-                        print(f"[LoginService.check_login_status] 错误堆栈:\n{traceback.format_exc()}")
                         is_logged_in = False
                     
                     if is_logged_in:
@@ -818,71 +811,30 @@ class LoginService:
             page: Page = session["page"]
             platform = session["platform"]
             
-            # 先检查页面和上下文是否有效
-            try:
-                if page.is_closed():
-                    print(f"[LoginService.check_login_status] 页面已关闭，无法检查登录状态")
-                    return {
-                        "status": "pending",
-                        "message": "正在检查登录状态，请稍候..."
-                    }
-            except Exception as e:
-                print(f"[LoginService.check_login_status] 检查页面状态时出错: {e}")
-                return {
-                    "status": "pending",
-                    "message": "正在检查登录状态，请稍候..."
-                }
-            
-            # 使用 storage_state 方式获取cookie（更可靠，不会阻塞）
-            print(f"[LoginService.check_login_status] 使用 storage_state 方式获取cookie...")
-            try:
-                # 创建临时文件路径
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.json')
-                temp_path = temp_file.name
-                temp_file.close()
-                
-                # 使用 storage_state 保存状态（包含所有cookie）
-                await asyncio.wait_for(
-                    context.storage_state(path=temp_path),
-                    timeout=5.0
-                )
-                
-                # 读取保存的状态文件
-                with open(temp_path, 'r', encoding='utf-8') as f:
-                    storage_data = json.load(f)
-                    cookies = storage_data.get('cookies', [])
-                
-                # 清理临时文件
-                try:
-                    os.unlink(temp_path)
-                except:
-                    pass
-                
-                print(f"[LoginService.check_login_status] 通过 storage_state 获取到 {len(cookies)} 个Cookie")
-            except asyncio.TimeoutError:
-                print(f"[LoginService.check_login_status] storage_state 超时，尝试直接获取cookie...")
-                # 如果 storage_state 超时，尝试直接获取cookie
+            # 检查登录状态
+            # 对于快手，尝试获取所有cookie（不指定URL），因为passToken可能在.kuaishou.com域下
+            if platform == "ks":
+                # 先尝试获取所有cookie
+                cookies = await context.cookies()
+                print(f"[LoginService.check_login_status] 快手：获取所有cookie，数量: {len(cookies)}")
+                # 如果没有找到passToken，再尝试指定域名
+                cookie_dict_temp = {c["name"]: c["value"] for c in cookies}
+                if "passToken" not in cookie_dict_temp:
+                    print(f"[LoginService.check_login_status] 快手：在所有cookie中未找到passToken，尝试获取www.kuaishou.com的cookie...")
+                    cookies_specific = await context.cookies("https://www.kuaishou.com")
+                    print(f"[LoginService.check_login_status] 快手：www.kuaishou.com域的cookie数量: {len(cookies_specific)}")
+                    # 合并cookie
+                    cookies_dict = {c["name"]: c for c in cookies}
+                    for c in cookies_specific:
+                        cookies_dict[c["name"]] = c
+                    cookies = list(cookies_dict.values())
+                    print(f"[LoginService.check_login_status] 快手：合并后的cookie数量: {len(cookies)}")
+            else:
+                # 添加超时控制，避免获取cookie时阻塞太久
                 try:
                     cookies = await asyncio.wait_for(context.cookies(), timeout=5.0)
                 except asyncio.TimeoutError:
                     print(f"[LoginService.check_login_status] 获取cookie超时，返回pending状态")
-                    return {
-                        "status": "pending",
-                        "message": "正在检查登录状态，请稍候..."
-                    }
-                except Exception as e:
-                    print(f"[LoginService.check_login_status] 获取cookie时出错: {e}")
-                    return {
-                        "status": "pending",
-                        "message": "正在检查登录状态，请稍候..."
-                    }
-            except Exception as e:
-                print(f"[LoginService.check_login_status] storage_state 失败: {e}，尝试直接获取cookie...")
-                # 如果 storage_state 失败，尝试直接获取cookie
-                try:
-                    cookies = await asyncio.wait_for(context.cookies(), timeout=5.0)
-                except Exception as e2:
-                    print(f"[LoginService.check_login_status] 获取cookie时出错: {e2}")
                     return {
                         "status": "pending",
                         "message": "正在检查登录状态，请稍候..."
@@ -900,10 +852,9 @@ class LoginService:
                 passToken = cookie_dict.get("passToken")
                 print(f"[LoginService.check_login_status] 快手passToken: {passToken[:30] if passToken and len(passToken) > 30 else passToken}... (存在: {bool(passToken)})")
             
-            # 获取登录前的web_session值（用于小红书登录状态判断）
-            no_logged_in_session = session.get("no_logged_in_session", "")
-            
             # 检查登录状态（同步函数，快速执行）
+            # 获取初始的web_session值（用于比较）
+            no_logged_in_session = session.get("no_logged_in_session", "")
             try:
                 is_logged_in = self._check_platform_login_status(platform, cookie_dict, page, no_logged_in_session)
             except Exception as e:
@@ -1049,34 +1000,14 @@ class LoginService:
         return selectors.get(platform, "")
     
     def _check_platform_login_status(self, platform: str, cookie_dict: Dict, page: Page, no_logged_in_session: str = "") -> bool:
-        """
-        检查平台登录状态
-        Args:
-            platform: 平台名称
-            cookie_dict: 当前cookie字典
-            page: 页面对象
-            no_logged_in_session: 登录前的web_session值（用于小红书登录状态判断）
-        """
+        """检查平台登录状态"""
         print(f"[LoginService._check_platform_login_status] 检查平台 {platform} 的登录状态...")
         print(f"[LoginService._check_platform_login_status] Cookie数量: {len(cookie_dict)}")
         print(f"[LoginService._check_platform_login_status] Cookie键列表: {list(cookie_dict.keys())[:20]}")
         
-        # 对于小红书，使用MediaCrawler的方式：比较web_session是否变化
-        if platform == "xhs":
-            current_web_session = cookie_dict.get("web_session", "")
-            print(f"[LoginService._check_platform_login_status] 登录前的web_session: {no_logged_in_session[:30] if no_logged_in_session else 'None'}...")
-            print(f"[LoginService._check_platform_login_status] 当前的web_session: {current_web_session[:30] if current_web_session else 'None'}...")
-            
-            # 如果web_session存在且与登录前的值不同，说明登录成功
-            if current_web_session and current_web_session != no_logged_in_session:
-                print(f"[LoginService._check_platform_login_status] ✓ web_session已变化，登录成功！")
-                return True
-            else:
-                print(f"[LoginService._check_platform_login_status] ✗ web_session未变化或不存在，等待登录...")
-                return False
-        
-        # 其他平台使用原来的逻辑
+        # 根据平台的关键cookie判断
         platform_key_cookies = {
+            "xhs": ["web_session", "a1", "webId"],  # 小红书多个关键cookie
             "dy": ["sid_guard", "sid_tt"],
             "ks": ["passToken"],  # 快手使用passToken判断登录状态（与kuaishou/login.py一致）
             "bili": ["SESSDATA", "DedeUserID"],
@@ -1095,7 +1026,52 @@ class LoginService:
                 print(f"[LoginService._check_platform_login_status] 检查关键Cookie '{key_cookie}' = '{cookie_value[:30] if cookie_value and len(cookie_value) > 30 else cookie_value}...' (长度: {len(cookie_value) if cookie_value else 0})")
                 if cookie_value and len(cookie_value) > 10:  # cookie值长度大于10才认为有效
                     print(f"[LoginService._check_platform_login_status] ✓ 找到有效关键Cookie: {key_cookie}")
-                    return True
+                    # 对于小红书，需要比较web_session是否变化
+                    if platform == "xhs" and key_cookie == "web_session":
+                        current_web_session = cookie_value
+                        print(f"[LoginService._check_platform_login_status] 初始web_session: {no_logged_in_session[:30] if no_logged_in_session else '(空)'}...")
+                        print(f"[LoginService._check_platform_login_status] 当前web_session: {current_web_session[:30] if current_web_session else '(空)'}...")
+                        
+                        # 如果初始值为空，但当前有值，说明登录了
+                        if not no_logged_in_session and current_web_session:
+                            print(f"[LoginService._check_platform_login_status] ✓ 初始值为空但当前有值，说明已登录")
+                            return True
+                        
+                        # 如果初始值和当前值都存在且不同，说明登录了
+                        if no_logged_in_session and current_web_session and no_logged_in_session != current_web_session:
+                            print(f"[LoginService._check_platform_login_status] ✓ web_session已变化，说明已登录")
+                            return True
+                        
+                        # 如果初始值和当前值相同，说明还没有登录（只是保留了之前的cookie）
+                        if no_logged_in_session and current_web_session and no_logged_in_session == current_web_session:
+                            print(f"[LoginService._check_platform_login_status] ⚠️ web_session未变化，说明还未登录（可能是之前的cookie）")
+                            return False
+                        
+                        # 如果都没有值，说明未登录
+                        if not current_web_session:
+                            print(f"[LoginService._check_platform_login_status] ✗ web_session不存在，未登录")
+                            return False
+                    elif platform == "xhs":
+                        # 对于其他关键cookie（a1, webId），也需要检查web_session是否变化
+                        web_session = cookie_dict.get("web_session", "")
+                        if web_session:
+                            current_web_session = web_session
+                            print(f"[LoginService._check_platform_login_status] 检查web_session变化: 初始={no_logged_in_session[:30] if no_logged_in_session else '(空)'}..., 当前={current_web_session[:30] if current_web_session else '(空)'}...")
+                            
+                            if not no_logged_in_session and current_web_session:
+                                print(f"[LoginService._check_platform_login_status] ✓ 初始值为空但当前有值，说明已登录")
+                                return True
+                            
+                            if no_logged_in_session and current_web_session and no_logged_in_session != current_web_session:
+                                print(f"[LoginService._check_platform_login_status] ✓ web_session已变化，说明已登录")
+                                return True
+                            
+                            if no_logged_in_session and current_web_session and no_logged_in_session == current_web_session:
+                                print(f"[LoginService._check_platform_login_status] ⚠️ web_session未变化，说明还未登录")
+                                return False
+                    else:
+                        # 其他平台直接返回True
+                        return True
         
         print(f"[LoginService._check_platform_login_status] ✗ 未找到有效的关键Cookie")
         return False
@@ -1180,6 +1156,46 @@ class LoginService:
         """检查是否有有效的cookie"""
         cookie = await self.load_cookie(platform)
         return cookie is not None and len(cookie) > 0
+    
+    async def verify_cookie_validity(self, platform: str, cookie_str: str) -> bool:
+        """
+        验证Cookie是否有效
+        通过尝试使用Cookie访问平台API来验证
+        """
+        if not cookie_str or len(cookie_str) == 0:
+            return False
+        
+        try:
+            if platform == "xhs":
+                # 对于小红书，直接使用API验证Cookie有效性（更简单、更快）
+                from media_platform.xhs.client import XiaoHongShuClient
+                
+                try:
+                    # 创建客户端并尝试ping接口验证Cookie
+                    client = XiaoHongShuClient(cookies=cookie_str)
+                    await client.pong()
+                    print(f"[LoginService.verify_cookie_validity] ✓ Cookie验证成功（通过pong接口）")
+                    return True
+                except Exception as pong_error:
+                    error_msg = str(pong_error)
+                    print(f"[LoginService.verify_cookie_validity] ⚠️ pong接口验证失败: {pong_error}")
+                    # 检查是否是权限错误（说明Cookie无效）
+                    if "没有权限" in error_msg or "权限" in error_msg or "登录" in error_msg or "DataFetchError" in str(type(pong_error).__name__):
+                        print(f"[LoginService.verify_cookie_validity] ❌ Cookie无效（权限错误）")
+                        return False
+                    # 其他错误可能是网络问题，暂时认为Cookie可能有效（避免误判）
+                    print(f"[LoginService.verify_cookie_validity] ⚠️ 可能是网络问题，暂时认为Cookie有效")
+                    return True
+            else:
+                # 其他平台暂时只检查Cookie是否存在
+                return cookie_str is not None and len(cookie_str) > 0
+        except Exception as e:
+            print(f"[LoginService.verify_cookie_validity] Cookie验证过程出错: {e}")
+            import traceback
+            print(f"[LoginService.verify_cookie_validity] 错误堆栈:\n{traceback.format_exc()}")
+            # 验证出错时，暂时认为Cookie有效（避免误判，让实际使用来判断）
+            print(f"[LoginService.verify_cookie_validity] ⚠️ 验证出错，暂时认为Cookie有效，将在实际使用时判断")
+            return True
 
 
 # 全局登录服务实例

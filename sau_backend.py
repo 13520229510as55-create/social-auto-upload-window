@@ -54,14 +54,18 @@ app = Flask(__name__)
 CORS(app)
 
 # 注册 MediaCrawler 爬虫管理蓝图
-try:
-    from crawler_api import crawler_bp
-    app.register_blueprint(crawler_bp)
-    print("✓ MediaCrawler 爬虫管理蓝图已注册")
-except ImportError as e:
-    print(f"⚠️ MediaCrawler 爬虫管理蓝图注册失败: {e}")
-except Exception as e:
-    print(f"⚠️ MediaCrawler 爬虫管理蓝图注册出错: {e}")
+# 如果使用 FastAPI 处理爬虫管理，则不注册 Flask 蓝图
+if not os.getenv('USE_FASTAPI_FOR_CRAWLER'):
+    try:
+        from crawler_api import crawler_bp
+        app.register_blueprint(crawler_bp)
+        print("✓ MediaCrawler 爬虫管理蓝图已注册（Flask 模式）")
+    except ImportError as e:
+        print(f"⚠️ MediaCrawler 爬虫管理蓝图注册失败: {e}")
+    except Exception as e:
+        print(f"⚠️ MediaCrawler 爬虫管理蓝图注册出错: {e}")
+else:
+    print("ℹ️ 爬虫管理使用 FastAPI（与 MediaCrawler 保持一致），跳过 Flask 蓝图注册")
 
 # 启动 Cookie 自动刷新定时任务（在应用初始化时启动）
 def start_cookie_refresh_scheduler():
@@ -3690,22 +3694,22 @@ def download_video_from_url(url, output_dir=None, max_retries=3):
         output_dir = Path(output_dir)
     
     output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 从URL中提取文件名
-        parsed_url = urlparse(url)
-        url_filename = os.path.basename(parsed_url.path)
-        # 如果URL中没有文件名，使用UUID生成
-        if not url_filename or '.' not in url_filename:
-            url_filename = f"downloaded_{uuid.uuid1()}.mp4"
-        # 去掉查询参数
-        if '?' in url_filename:
-            url_filename = url_filename.split('?')[0]
-        
-        # 生成唯一文件名
-        uuid_v1 = uuid.uuid1()
-        local_filename = f"{uuid_v1}_{url_filename}"
-        local_filepath = output_dir / local_filename
-        
+    
+    # 从URL中提取文件名
+    parsed_url = urlparse(url)
+    url_filename = os.path.basename(parsed_url.path)
+    # 如果URL中没有文件名，使用UUID生成
+    if not url_filename or '.' not in url_filename:
+        url_filename = f"downloaded_{uuid.uuid1()}.mp4"
+    # 去掉查询参数
+    if '?' in url_filename:
+        url_filename = url_filename.split('?')[0]
+    
+    # 生成唯一文件名
+    uuid_v1 = uuid.uuid1()
+    local_filename = f"{uuid_v1}_{url_filename}"
+    local_filepath = output_dir / local_filename
+    
     # 设置请求头，模拟浏览器请求
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -3765,7 +3769,7 @@ def download_video_from_url(url, output_dir=None, max_retries=3):
             session.mount("https://", adapter)
             
             # 下载文件（增加超时时间，使用连接池）
-        print(f"📥 下载中: {url} -> {local_filepath}")
+            print(f"📥 下载中: {url} -> {local_filepath}")
             
             # 对于 Google Cloud Storage 或国内服务器，默认禁用 SSL 验证
             # 因为国内服务器访问 Google 服务经常遇到 SSL/网络问题
@@ -3781,35 +3785,35 @@ def download_video_from_url(url, output_dir=None, max_retries=3):
                 allow_redirects=True,
                 verify=verify_ssl
             )
-        response.raise_for_status()
-        
-        # 获取文件大小
-        total_size = int(response.headers.get('content-length', 0))
-        if total_size > 0:
-            print(f"📦 文件大小: {total_size / (1024*1024):.2f} MB")
-        
+            response.raise_for_status()
+            
+            # 获取文件大小
+            total_size = int(response.headers.get('content-length', 0))
+            if total_size > 0:
+                print(f"📦 文件大小: {total_size / (1024*1024):.2f} MB")
+            
             # 写入文件（使用更大的chunk size以提高下载速度）
-        downloaded_size = 0
+            downloaded_size = 0
             chunk_size = 64 * 1024  # 64KB chunks
             
-        with open(local_filepath, 'wb') as f:
+            with open(local_filepath, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=chunk_size):
-                if chunk:
-                    f.write(chunk)
-                    downloaded_size += len(chunk)
-                    if total_size > 0:
-                        progress = (downloaded_size / total_size) * 100
+                    if chunk:
+                        f.write(chunk)
+                        downloaded_size += len(chunk)
+                        if total_size > 0:
+                            progress = (downloaded_size / total_size) * 100
                             # 每10MB打印一次进度
                             if downloaded_size % (10 * 1024 * 1024) < chunk_size:
-                            print(f"📥 下载进度: {progress:.1f}% ({downloaded_size / (1024*1024):.2f} MB / {total_size / (1024*1024):.2f} MB)")
-        
+                                print(f"📥 下载进度: {progress:.1f}% ({downloaded_size / (1024*1024):.2f} MB / {total_size / (1024*1024):.2f} MB)")
+            
             # 验证文件是否完整下载
             if total_size > 0 and downloaded_size != total_size:
                 raise Exception(f"文件下载不完整: 已下载 {downloaded_size} 字节，期望 {total_size} 字节")
             
-        print(f"✅ 视频下载完成: {local_filename} ({downloaded_size / (1024*1024):.2f} MB)")
+            print(f"✅ 视频下载完成: {local_filename} ({downloaded_size / (1024*1024):.2f} MB)")
             session.close()
-        return local_filename
+            return local_filename
             
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, 
                 ConnectionResetError, requests.exceptions.ChunkedEncodingError,
@@ -3894,11 +3898,11 @@ def download_video_from_url(url, output_dir=None, max_retries=3):
                 traceback.print_exc()
                 raise Exception(f"从URL下载视频失败（已重试 {max_retries} 次）: {str(e)}")
         
-    except Exception as e:
+        except Exception as e:
             # 其他错误，不重试
-        print(f"❌ 下载视频失败: {str(e)}")
-        import traceback
-        traceback.print_exc()
+            print(f"❌ 下载视频失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
             # 清理不完整的文件
             if local_filepath.exists():
                 try:
@@ -4486,7 +4490,7 @@ def run_async_function(type, id, status_queue, browser_context_storage=None, aut
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             # 当前统一使用 Playwright 版本实现，不再依赖 login_wrapper
-                loop.run_until_complete(get_tencent_cookie(id, status_queue))
+            loop.run_until_complete(get_tencent_cookie(id, status_queue))
             loop.close()
             
             # 恢复原来的环境变量

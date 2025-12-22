@@ -99,7 +99,7 @@
               <el-menu-item index="/production/overview">
                 <el-icon><Odometer /></el-icon>
                 <span>总览</span>
-              </el-menu-item>
+            </el-menu-item>
               
               <!-- 素材管理（二级菜单） -->
               <el-menu-item index="/production/materials">

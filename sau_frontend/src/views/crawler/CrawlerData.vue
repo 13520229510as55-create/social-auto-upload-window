@@ -282,44 +282,7 @@ const loadPlatforms = async () => {
   }
 }
 
-onMounted(async () => {
-  await loadPlatforms()
-  // 如果有路由参数，设置当前平台
-  if (route.params.platform) {
-    currentPlatform.value = route.params.platform
-  }
-})
-
-watch(currentPlatform, (newPlatform) => {
-  if (newPlatform !== 'wechat') {
-    searchText.value = ''
-    filterCrawlerType.value = ''
-    filterKeyword.value = ''
-    filterNoteType.value = ''
-    sortInfo.field = ''
-    sortInfo.order = ''
-    pagination.current = 1
-    pagination.pageSize = 20
-    pagination.total = 0
-    
-    // 加载筛选选项（小红书和快手）
-    if (newPlatform === 'xhs' || newPlatform === 'ks') {
-      loadFilterOptions()
-    }
-    // 加载数据
-    loadData()
-  }
-}, { immediate: true })
-
-watch(
-  [currentPlatform, () => pagination.current, () => pagination.pageSize, filterCrawlerType, filterKeyword, filterNoteType, () => sortInfo.field, () => sortInfo.order],
-  () => {
-    if (currentPlatform.value !== 'wechat') {
-      loadData()
-    }
-  }
-)
-
+// 先定义函数，避免在 watch 中访问未初始化的函数
 const loadFilterOptions = async () => {
   try {
     const result = await crawlerApi.getFilterOptions(currentPlatform.value)
@@ -370,6 +333,44 @@ const loadData = async (showMessage = false) => {
     loading.value = false
   }
 }
+
+onMounted(async () => {
+  await loadPlatforms()
+  // 如果有路由参数，设置当前平台
+  if (route.params.platform) {
+    currentPlatform.value = route.params.platform
+  }
+})
+
+watch(currentPlatform, (newPlatform) => {
+  if (newPlatform !== 'wechat') {
+    searchText.value = ''
+    filterCrawlerType.value = ''
+    filterKeyword.value = ''
+    filterNoteType.value = ''
+    sortInfo.field = ''
+    sortInfo.order = ''
+    pagination.current = 1
+    pagination.pageSize = 20
+    pagination.total = 0
+    
+    // 加载筛选选项（小红书和快手）
+    if (newPlatform === 'xhs' || newPlatform === 'ks') {
+      loadFilterOptions()
+    }
+    // 加载数据
+    loadData()
+  }
+}, { immediate: true })
+
+watch(
+  [currentPlatform, () => pagination.current, () => pagination.pageSize, filterCrawlerType, filterKeyword, filterNoteType, () => sortInfo.field, () => sortInfo.order],
+  () => {
+    if (currentPlatform.value !== 'wechat') {
+      loadData()
+    }
+  }
+)
 
 const handleRefresh = () => {
   loadData(true)
