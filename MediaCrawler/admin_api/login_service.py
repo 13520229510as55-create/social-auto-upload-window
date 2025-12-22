@@ -747,7 +747,10 @@ class LoginService:
         if qrcode_id not in login_sessions:
             # 会话不存在，检查是否有已保存的cookie（可能已经登录成功但会话过期）
             print(f"[LoginService.check_login_status] 会话 {qrcode_id} 不存在，检查是否有已保存的cookie...")
-            cookie_file = self.cookie_dir / "xhs_cookies.json"
+            # 从qrcode_id中提取平台名称（格式：platform_timestamp）
+            platform = qrcode_id.split("_")[0] if "_" in qrcode_id else "xhs"
+            cookie_file = self.cookie_dir / f"{platform}_cookies.json"
+            print(f"[LoginService.check_login_status] 检查平台 {platform} 的cookie文件: {cookie_file}")
             if cookie_file.exists():
                 print(f"[LoginService.check_login_status] ✓ 找到已保存的cookie文件: {cookie_file}")
                 try:
@@ -763,6 +766,8 @@ class LoginService:
                             }
                 except Exception as e:
                     print(f"[LoginService.check_login_status] 读取cookie文件失败: {e}")
+            else:
+                print(f"[LoginService.check_login_status] Cookie文件不存在: {cookie_file}")
             return {"status": "expired", "message": "会话已过期"}
         
         session = login_sessions[qrcode_id]

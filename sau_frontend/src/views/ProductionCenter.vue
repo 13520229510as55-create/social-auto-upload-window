@@ -2320,6 +2320,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import { Upload, Plus, Close, Folder, VideoCamera, Picture, Document, Promotion, Check, CircleCheckFilled, ArrowLeft, ArrowRight, View, Edit, RefreshRight, Finished, Delete, FolderOpened, Link, Loading, ZoomIn } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAccountStore } from '@/stores/account'

@@ -547,8 +547,15 @@ async def start_crawler_task(task_request: TaskRequest, background_tasks: Backgr
     try:
         task_id = f"{task_request.platform}_{int(asyncio.get_event_loop().time())}"
         
-        # 保存任务记录到数据库
-        save_task_to_db(task_id, task_request.platform, task_request, status="running", progress=0, message="任务启动中...")
+        # 保存任务记录到数据库（使用 asyncio.to_thread 确保在异步上下文中正确执行）
+        try:
+            await asyncio.to_thread(save_task_to_db, task_id, task_request.platform, task_request, "running", 0, "任务启动中...")
+            print(f"[start_crawler_task] ✓ 任务记录已保存到数据库: {task_id}")
+        except Exception as save_error:
+            print(f"[start_crawler_task] ⚠️ 保存任务记录失败: {save_error}")
+            import traceback
+            traceback.print_exc()
+            # 即使保存失败，也继续执行任务
         
         # 启动爬虫任务
         async def run_crawler():
@@ -632,8 +639,11 @@ async def start_crawler_task(task_request: TaskRequest, background_tasks: Backgr
                     "message": "任务启动中..."
                 }
                 
-                # 更新数据库中的任务状态
-                update_task_status(task_id, "running", progress=0, message="任务启动中...")
+                # 更新数据库中的任务状态（使用 asyncio.to_thread 确保在异步上下文中正确执行）
+                try:
+                    await asyncio.to_thread(update_task_status, task_id, "running", 0, "任务启动中...")
+                except Exception as update_error:
+                    print(f"[start_crawler_task] ⚠️ 更新任务状态失败: {update_error}")
                 
                 # 切换到项目根目录执行爬虫
                 original_cwd = os.getcwd()
@@ -656,8 +666,11 @@ async def start_crawler_task(task_request: TaskRequest, background_tasks: Backgr
                     "message": "任务完成"
                 }
                 
-                # 更新数据库中的任务状态
-                update_task_status(task_id, "completed", progress=100, message="任务完成")
+                # 更新数据库中的任务状态（使用 asyncio.to_thread 确保在异步上下文中正确执行）
+                try:
+                    await asyncio.to_thread(update_task_status, task_id, "completed", 100, "任务完成")
+                except Exception as update_error:
+                    print(f"[start_crawler_task] ⚠️ 更新任务状态失败: {update_error}")
             except Exception as e:
                 import traceback
                 error_detail = str(e)
@@ -668,8 +681,11 @@ async def start_crawler_task(task_request: TaskRequest, background_tasks: Backgr
                     "message": error_detail
                 }
                 
-                # 更新数据库中的任务状态
-                update_task_status(task_id, "failed", progress=0, message=error_detail)
+                # 更新数据库中的任务状态（使用 asyncio.to_thread 确保在异步上下文中正确执行）
+                try:
+                    await asyncio.to_thread(update_task_status, task_id, "failed", 0, error_detail)
+                except Exception as update_error:
+                    print(f"[start_crawler_task] ⚠️ 更新任务状态失败: {update_error}")
                 
                 print(f"[start_crawler_task] 任务执行失败: {error_detail}")
                 print(f"[start_crawler_task] 错误堆栈:\n{traceback.format_exc()}")

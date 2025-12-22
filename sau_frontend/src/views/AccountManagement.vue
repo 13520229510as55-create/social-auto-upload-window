@@ -1583,7 +1583,7 @@ const submitAccountForm = () => {
         }
         
         // 统一使用扫码登录方式：建立SSE连接（传递自动化框架选择）
-        connectSSE(accountForm.platform, accountForm.name, accountForm.automationTool)
+          connectSSE(accountForm.platform, accountForm.name, accountForm.automationTool)
       } else {
         // 编辑账号逻辑
         try {

@@ -31,7 +31,7 @@ except ImportError:
     # 兼容旧版本 conf.py（没有代理配置）
     HTTP_PROXY = ''
     HTTPS_PROXY = ''
-from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen
+from myUtils.login import get_tencent_cookie, douyin_cookie_gen, get_ks_cookie, xiaohongshu_cookie_gen, bilibili_cookie_gen
 from myUtils.postVideo import post_video_tencent, post_video_DouYin, post_video_ks, post_video_xhs, post_image_text_xhs
 from urllib.parse import urlparse
 import shutil
@@ -4510,6 +4510,13 @@ def run_async_function(type, id, status_queue, browser_context_storage=None, aut
             asyncio.set_event_loop(loop)
             loop.run_until_complete(get_ks_cookie(id, status_queue))
             loop.close()
+        elif type == '5':
+            print(f"[异步任务] 调用B站登录函数，传递账号名称: {repr(id)}")
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(bilibili_cookie_gen(id, status_queue))
+            loop.close()
+            print(f"[异步任务] B站登录任务完成")
     except Exception as e:
         print(f"[异步任务] 登录任务执行出错: {str(e)}")
         import traceback
