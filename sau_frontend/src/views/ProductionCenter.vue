@@ -2383,7 +2383,7 @@ const tempConfig = reactive({
     coverStyleReference: '',
     coverImageRatio: '1664*928',
     infoGraphicType: 'minimalist-tech',
-    imageModel: 'sora',
+    imageModel: 'qianwen',
     publishPlatform: 'xiaohongshu'
   },
   article: {
@@ -4934,6 +4934,284 @@ onMounted(() => {
   // 启动文章记录轮询监听
   startArticlePolling()
   
+  // 获取路由实例
+  const route = useRoute()
+  
+  // 检查是否有从爬虫数据列表传入的配置（通过路由查询参数）
+  if (route.query.type && route.query.source === 'crawler') {
+    console.log('🔍 检测到从爬虫数据列表跳转，类型:', route.query.type)
+    console.log('🔍 路由查询参数:', route.query)
+    
+    try {
+      const queryType = route.query.type
+      const queryConfig = route.query.config ? JSON.parse(route.query.config) : null
+      
+      // 如果是文章类型，直接调用文章创作接口
+      if (queryType === 'article' && queryConfig) {
+        console.log('✅ 检测到文章类型，准备调用文章创作接口')
+        console.log('✅ 文章配置:', JSON.stringify(queryConfig, null, 2))
+        
+        // 验证配置
+        if (!queryConfig.writingMode) {
+          ElMessage.warning('文章配置缺少写作模式')
+          return
+        }
+        
+        if (['polish', 'imitate', 'reprint'].includes(queryConfig.writingMode)) {
+          if (!queryConfig.articleLink) {
+            ElMessage.warning('文章配置缺少文章链接')
+            return
+          }
+        }
+        
+        // 立即关闭弹窗（如果打开了）
+        contentTypeDialogVisible.value = false
+        dialogStep.value = 'select'
+        
+        // 创建虚拟记录并添加到列表顶部
+        const virtualRecord = createVirtualRecord('article')
+        if (virtualRecord) {
+          productionRecords.value.unshift(virtualRecord)
+          console.log('✅ 虚拟文章记录已添加到列表，ID:', virtualRecord.id)
+          // 如果有虚拟记录，确保轮询正在运行
+          if (!articlePollingInterval) {
+            startArticlePolling()
+          }
+        }
+        
+        // 异步调用webhook，不阻塞
+        console.log('🔍 准备发送文章任务，queryConfig:', queryConfig)
+        sendArticleWebhook(queryConfig, 600000) // 10分钟超时
+          .then(result => {
+            console.log('✅ 文章任务 webhook 调用成功:', result)
+            
+            // 如果webhook立即返回了完整数据，保存到后端并更新虚拟记录
+            if (result && (result.article_title || result.title || result.data?.article_title || result.data?.title)) {
+              const articleTitle = result?.article_title || result?.title || result?.data?.article_title || result?.data?.title || `文章任务-${formatLocalDateTime(new Date())}`
+              const articleContent = result?.article_content || result?.content || result?.data?.article_content || result?.data?.content || '文章内容生成中，请稍候...'
+              const articleDesc = result?.article_desc || result?.description || result?.data?.article_desc || result?.data?.description || ''
+              const articleMediaId = result?.article_media_id || result?.media_id || result?.data?.article_media_id || result?.data?.media_id || ''
+              const articleMediaUrl = result?.article_media_url || result?.media_url || result?.data?.article_media_url || result?.data?.media_url || ''
+              
+              // 保存到后端
+              fetch(`${apiBaseUrl}/production/articles`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  article_title: articleTitle,
+                  article_content: articleContent,
+                  article_desc: articleDesc,
+                  article_media_id: articleMediaId,
+                  article_media_url: articleMediaUrl
+                })
+              })
+                .then(saveResponse => saveResponse.json())
+                .then(saveResult => {
+                  if (saveResult.code === 200 && saveResult.data?.id) {
+                    console.log('✅ 文章已保存到后端，ID:', saveResult.data.id)
+                    // 更新虚拟记录为真实记录
+                    if (virtualRecord) {
+                      virtualRecord.id = saveResult.data.id
+                      virtualRecord.isVirtual = false
+                      virtualRecord.title = articleTitle
+                      virtualRecord.article_content = articleContent
+                      virtualRecord.article_desc = articleDesc
+                      virtualRecord.article_media_id = articleMediaId
+                      virtualRecord.article_media_url = articleMediaUrl
+                    }
+                    // 刷新列表
+                    fetchProductionRecords('article')
+                  }
+                })
+                .catch(saveError => {
+                  console.error('保存文章到后端失败:', saveError)
+                })
+            }
+          })
+          .catch(error => {
+            console.error('❌ 文章任务 webhook 调用失败:', error)
+            ElMessage.error({
+              message: `文章创作失败: ${error.message || '未知错误'}`,
+              duration: 5000,
+              showClose: true
+            })
+            // 如果失败，删除虚拟记录
+            if (virtualRecord) {
+              productionRecords.value = productionRecords.value.filter(item => item.id !== virtualRecord.id)
+            }
+          })
+        
+        // 清除路由查询参数，避免重复触发
+        if (window.history && window.history.replaceState) {
+          const newQuery = { ...route.query }
+          delete newQuery.type
+          delete newQuery.source
+          delete newQuery.config
+          delete newQuery.url
+          delete newQuery.title
+          delete newQuery.desc
+          delete newQuery.platform
+          window.history.replaceState({}, '', {
+            path: route.path,
+            query: newQuery
+          })
+        }
+        
+        return // 文章类型处理完成，不再处理其他逻辑
+      }
+      
+      // 图文类型的处理逻辑（自动调用webhook）
+      if (queryType === 'image-text' && queryConfig) {
+        console.log('✅ 检测到图文类型，准备调用图文创作接口')
+        console.log('✅ 图文配置:', JSON.stringify(queryConfig, null, 2))
+        
+        // 验证配置
+        if (!queryConfig.inputContent) {
+          ElMessage.warning('图文配置缺少输入内容')
+          return
+        }
+        
+        if (!queryConfig.contentLayoutStyle) {
+          ElMessage.warning('图文配置缺少内容排版风格')
+          return
+        }
+        
+        if (!queryConfig.imageModel) {
+          ElMessage.warning('图文配置缺少生图模型')
+          return
+        }
+        
+        if (!queryConfig.publishPlatform) {
+          ElMessage.warning('图文配置缺少发布平台')
+          return
+        }
+        
+        // 立即关闭弹窗（如果打开了）
+        contentTypeDialogVisible.value = false
+        dialogStep.value = 'select'
+        
+        // 创建虚拟记录并添加到列表顶部
+        const virtualRecord = createVirtualRecord('image-text')
+        if (virtualRecord) {
+          productionRecords.value.unshift(virtualRecord)
+          console.log('✅ 虚拟图文记录已添加到列表，ID:', virtualRecord.id)
+          // 如果有虚拟记录，确保轮询正在运行
+          if (!imageTextPollingInterval) {
+            startImageTextPolling()
+          }
+        }
+        
+        // 异步调用webhook，不阻塞
+        console.log('🔍 准备发送图文任务，queryConfig:', queryConfig)
+        sendImageTextWebhook(queryConfig, 600000) // 10分钟超时
+          .then(result => {
+            console.log('✅ 图文任务 webhook 调用成功:', result)
+            
+            // 如果webhook立即返回了完整数据，保存到后端并更新虚拟记录
+            if (result && (result.title || result.data?.title)) {
+              const title = result.title || result.data?.title || `图文任务-${formatLocalDateTime(new Date())}`
+              const content = result.content || result.data?.content || '图文内容生成中...'
+              const mediaIds = result.media_ids || result.data?.media_ids || []
+              const height = result.height || result.data?.height || 1080
+              const width = result.width || result.data?.width || 1920
+              
+              // 保存到后端
+              const urls = Array.isArray(mediaIds) ? mediaIds : (mediaIds ? [mediaIds] : [])
+              console.log('💾 保存图文记录到后端，urls数组:', urls)
+              fetch(`${apiBaseUrl}/production/image-text`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, content, urls: urls, height, width })
+              })
+                .then(saveResponse => saveResponse.json())
+                .then(saveResult => {
+                  if (saveResult.code === 200 && saveResult.data?.id) {
+                    console.log('✅ 图文已保存到后端，ID:', saveResult.data.id)
+                    // 更新虚拟记录为真实记录
+                    if (virtualRecord) {
+                      virtualRecord.id = saveResult.data.id
+                      virtualRecord.isVirtual = false
+                      virtualRecord.title = title
+                      virtualRecord.content = content
+                      virtualRecord.media_ids = urls
+                    }
+                    // 刷新列表
+                    fetchProductionRecords('image-text')
+                  }
+                })
+                .catch(saveError => {
+                  console.error('保存图文到后端失败:', saveError)
+                })
+            } else {
+              // 启动轮询，等待n8n返回结果并替换虚拟记录
+              pollForRecordCompletion(virtualRecord.id, 'image-text', 300, 2000)
+                .then(found => {
+                  if (found) {
+                    ElMessage.success('✅ 图文任务已完成，列表已更新')
+                  } else {
+                    ElMessage.warning('⚠️ 图文任务已发送，但未检测到完成记录，请稍后手动刷新')
+                  }
+                })
+            }
+          })
+          .catch(error => {
+            console.error('❌ 图文任务 webhook 调用失败:', error)
+            ElMessage.error({
+              message: `图文创作失败: ${error.message || '未知错误'}`,
+              duration: 5000,
+              showClose: true
+            })
+            // 如果失败，删除虚拟记录
+            if (virtualRecord) {
+              productionRecords.value = productionRecords.value.filter(item => item.id !== virtualRecord.id)
+            }
+          })
+        
+        // 清除路由查询参数，避免重复触发
+        if (window.history && window.history.replaceState) {
+          const newQuery = { ...route.query }
+          delete newQuery.type
+          delete newQuery.source
+          delete newQuery.config
+          delete newQuery.url
+          delete newQuery.title
+          delete newQuery.desc
+          delete newQuery.platform
+          window.history.replaceState({}, '', {
+            path: route.path,
+            query: newQuery
+          })
+        }
+        
+        return // 图文类型处理完成，不再处理其他逻辑
+      }
+      
+      // 视频类型的处理逻辑（打开弹窗）
+      if (queryType === 'video') {
+        // 打开制作类型选择弹窗
+        selectedContentType.value = queryType
+        dialogStep.value = 'select'
+        contentTypeDialogVisible.value = true
+        
+        // 如果选择了类型，自动进入配置步骤
+        if (selectedContentType.value) {
+          // 等待弹窗渲染完成后再进入配置步骤
+          setTimeout(() => {
+            dialogStep.value = 'config'
+            
+            // 应用配置
+            if (queryConfig) {
+              Object.assign(tempConfig.video, queryConfig)
+            }
+          }, 100)
+        }
+      }
+    } catch (error) {
+      console.error('解析爬虫数据列表传入的配置失败:', error)
+      ElMessage.error('配置解析失败: ' + error.message)
+    }
+  }
+  
   // 检查是否有从热点中心传入的配置
   const pendingConfigStr = sessionStorage.getItem('hotspot_pending_production_config')
   if (pendingConfigStr) {
@@ -5177,7 +5455,7 @@ const resetTempConfig = () => {
     coverStyleReference: '',
     coverImageRatio: '1664*928',
     infoGraphicType: 'minimalist-tech',
-    imageModel: 'sora',
+    imageModel: 'qianwen',
     publishPlatform: 'xiaohongshu'
   }
   tempConfig.article = {

@@ -23,21 +23,27 @@ export function resolveApiBaseUrl() {
     return '/api'
   }
   
+  // 规则 2: localhost/127.0.0.1，强制使用相对路径，忽略所有环境变量
+  // 这是本地开发的重要规则，必须优先于环境变量检查
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+    return API_PATH_PREFIX
+  }
+  
   let API_BASE_URL = import.meta.env.VITE_API_BASE_URL
   
-  // 规则 2: localhost/127.0.0.1，忽略环境变量，使用相对路径
+  // 规则 3: 如果环境变量包含 localhost/127.0.0.1，使用相对路径
   if (API_BASE_URL && (API_BASE_URL.includes('localhost') || API_BASE_URL.includes('127.0.0.1'))) {
     return API_PATH_PREFIX
   }
   
-  // 规则 3: 如果设置了环境变量且不是 localhost
+  // 规则 4: 如果设置了环境变量且不是 localhost
   if (API_BASE_URL) {
     // 确保不以 / 结尾
     if (API_BASE_URL.endsWith('/')) {
       API_BASE_URL = API_BASE_URL.slice(0, -1)
     }
     
-    // 规则 4: 检查是否已经包含 /api，避免重复添加
+    // 规则 5: 检查是否已经包含 /api，避免重复添加
     const normalizedPrefix = API_PATH_PREFIX.replace(/\/$/, '') // 移除尾部斜杠
     if (API_BASE_URL.endsWith('/api') || API_BASE_URL.endsWith(normalizedPrefix)) {
       // 如果环境变量是完整URL且包含 /api，直接返回（用于非yutt.xyz域名）

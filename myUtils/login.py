@@ -412,9 +412,9 @@ async def xiaohongshu_cookie_gen(id, status_queue):
                         with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
                             cursor = conn.cursor()
                             cursor.execute('''
-                                           INSERT INTO user_info (type, filePath, userName, status)
-                                           VALUES (?, ?, ?, ?)
-                                           ''', (1, f"{uuid_v1}.json", id, 1))
+                                INSERT INTO user_info (type, filePath, userName, status)
+                                VALUES (?, ?, ?, ?)
+                            ''', (1, f"{uuid_v1}.json", id, 1))
                             conn.commit()
                             send_log("账号信息已保存到数据库")
                         

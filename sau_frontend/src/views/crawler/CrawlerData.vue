@@ -1131,7 +1131,7 @@ const productionTempConfig = reactive({
     coverStyleReference: '',
     coverImageRatio: '1664*928',
     infoGraphicType: 'minimalist-tech',
-    imageModel: 'sora',
+    imageModel: 'qianwen',
     publishPlatform: 'xiaohongshu'
   },
   article: {
@@ -1229,7 +1229,7 @@ const resetProductionTempConfig = () => {
     coverStyleReference: '',
     coverImageRatio: '1664*928',
     infoGraphicType: 'minimalist-tech',
-    imageModel: 'sora',
+    imageModel: 'qianwen',
     publishPlatform: 'xiaohongshu'
   }
   productionTempConfig.article = {
@@ -1322,10 +1322,10 @@ const handleConfirmCreateProductionTask = () => {
   productionTypeDialogVisible.value = false
   productionDialogStep.value = 'select'
   
-  // 跳转到制作中心，并传递数据
+  // 跳转到制作中心-数据列表，并传递数据
   const row = currentProductionRow.value
   router.push({
-    path: '/production',
+    path: '/production/data',
     query: {
       type: selectedProductionType.value,
       source: 'crawler',
