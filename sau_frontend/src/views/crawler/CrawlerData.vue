@@ -1301,9 +1301,43 @@ const handleConfirmCreateProductionTask = () => {
       ElMessage.warning('请输入内容')
       return
     }
+    // 确保所有必填字段都有默认值（即使用户没有选择）
     if (!productionTempConfig.imageText.contentLayoutStyle) {
-      ElMessage.warning('请选择内容排版风格')
-      return
+      console.warn('⚠️ 内容排版风格缺失，使用默认值: xiaohongshu-hot')
+      productionTempConfig.imageText.contentLayoutStyle = 'xiaohongshu-hot'
+    }
+    if (!productionTempConfig.imageText.imageModel) {
+      console.warn('⚠️ 生图模型缺失，使用默认值: qianwen')
+      productionTempConfig.imageText.imageModel = 'qianwen'
+    }
+    if (!productionTempConfig.imageText.publishPlatform) {
+      console.warn('⚠️ 发布平台缺失，使用默认值: xiaohongshu')
+      productionTempConfig.imageText.publishPlatform = 'xiaohongshu'
+    }
+    // 确保其他字段也有默认值
+    if (!productionTempConfig.imageText.contentSourceType) {
+      productionTempConfig.imageText.contentSourceType = 'other'
+    }
+    if (productionTempConfig.imageText.imageCount === undefined || productionTempConfig.imageText.imageCount === null) {
+      productionTempConfig.imageText.imageCount = 3
+    }
+    if (!productionTempConfig.imageText.imageStyleType) {
+      productionTempConfig.imageText.imageStyleType = 'builtin-ai-no'
+    }
+    if (!productionTempConfig.imageText.imageRatio) {
+      productionTempConfig.imageText.imageRatio = '1664*928'
+    }
+    if (!productionTempConfig.imageText.coverStyleType) {
+      productionTempConfig.imageText.coverStyleType = 'ai-auto'
+    }
+    if (!productionTempConfig.imageText.coverImageRatio) {
+      productionTempConfig.imageText.coverImageRatio = '1664*928'
+    }
+    if (!productionTempConfig.imageText.infoGraphicType) {
+      productionTempConfig.imageText.infoGraphicType = 'minimalist-tech'
+    }
+    if (productionTempConfig.imageText.contentWordCount === undefined || productionTempConfig.imageText.contentWordCount === null) {
+      productionTempConfig.imageText.contentWordCount = 1000
     }
   } else if (selectedProductionType.value === 'article') {
     if (!productionTempConfig.article.writingMode) {
@@ -1324,6 +1358,25 @@ const handleConfirmCreateProductionTask = () => {
   
   // 跳转到制作中心-数据列表，并传递数据
   const row = currentProductionRow.value
+  const configToSend = { ...productionTempConfig[selectedProductionType.value] }
+  
+  // 确保所有字段都被包含（即使是默认值）
+  if (selectedProductionType.value === 'image-text') {
+    // 确保所有必填字段都有值
+    const imageTextConfig = configToSend
+    console.log('📤 图文配置原始值:', JSON.stringify(imageTextConfig, null, 2))
+    console.log('📤 内容来源类型:', imageTextConfig.contentSourceType)
+    console.log('📤 配图风格类型选择:', imageTextConfig.imageStyleType)
+    console.log('📤 配图张数:', imageTextConfig.imageCount)
+    console.log('📤 配图-比例:', imageTextConfig.imageRatio)
+    console.log('📤 封面图风格类型选择:', imageTextConfig.coverStyleType)
+    console.log('📤 封面图-比例:', imageTextConfig.coverImageRatio)
+    console.log('📤 封面图-信息图类型:', imageTextConfig.infoGraphicType)
+    console.log('📤 图文内容字数:', imageTextConfig.contentWordCount)
+  }
+  
+  console.log('📤 准备跳转到制作中心，完整配置:', JSON.stringify(configToSend, null, 2))
+  
   router.push({
     path: '/production/data',
     query: {
@@ -1333,7 +1386,7 @@ const handleConfirmCreateProductionTask = () => {
       title: row.title || '',
       desc: row.desc || '',
       platform: currentPlatform.value,
-      config: JSON.stringify(productionTempConfig[selectedProductionType.value])
+      config: JSON.stringify(configToSend)
     }
   })
   

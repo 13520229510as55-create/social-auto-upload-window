@@ -5064,27 +5064,64 @@ onMounted(() => {
       if (queryType === 'image-text' && queryConfig) {
         console.log('✅ 检测到图文类型，准备调用图文创作接口')
         console.log('✅ 图文配置:', JSON.stringify(queryConfig, null, 2))
+        console.log('✅ 内容来源类型:', queryConfig.contentSourceType)
+        console.log('✅ 配图风格类型选择:', queryConfig.imageStyleType)
+        console.log('✅ 配图张数:', queryConfig.imageCount)
+        console.log('✅ 配图-比例:', queryConfig.imageRatio)
+        console.log('✅ 封面图风格类型选择:', queryConfig.coverStyleType)
+        console.log('✅ 封面图-比例:', queryConfig.coverImageRatio)
+        console.log('✅ 封面图-信息图类型:', queryConfig.infoGraphicType)
+        console.log('✅ 图文内容字数:', queryConfig.contentWordCount)
         
-        // 验证配置
+        // 验证必填字段并提供默认值
         if (!queryConfig.inputContent) {
           ElMessage.warning('图文配置缺少输入内容')
           return
         }
         
+        // 为缺失的字段提供默认值，确保能正常调用webhook
         if (!queryConfig.contentLayoutStyle) {
-          ElMessage.warning('图文配置缺少内容排版风格')
-          return
+          console.warn('⚠️ 内容排版风格缺失，使用默认值: xiaohongshu-hot')
+          queryConfig.contentLayoutStyle = 'xiaohongshu-hot'
         }
         
         if (!queryConfig.imageModel) {
-          ElMessage.warning('图文配置缺少生图模型')
-          return
+          console.warn('⚠️ 生图模型缺失，使用默认值: qianwen')
+          queryConfig.imageModel = 'qianwen'
         }
         
         if (!queryConfig.publishPlatform) {
-          ElMessage.warning('图文配置缺少发布平台')
-          return
+          console.warn('⚠️ 发布平台缺失，使用默认值: xiaohongshu')
+          queryConfig.publishPlatform = 'xiaohongshu'
         }
+        
+        // 确保其他字段也有默认值
+        if (!queryConfig.contentSourceType) {
+          queryConfig.contentSourceType = 'other'
+        }
+        if (queryConfig.imageCount === undefined || queryConfig.imageCount === null) {
+          queryConfig.imageCount = 3
+        }
+        if (!queryConfig.imageStyleType) {
+          queryConfig.imageStyleType = 'builtin-ai-no'
+        }
+        if (!queryConfig.imageRatio) {
+          queryConfig.imageRatio = '1664*928'
+        }
+        if (!queryConfig.coverStyleType) {
+          queryConfig.coverStyleType = 'ai-auto'
+        }
+        if (!queryConfig.coverImageRatio) {
+          queryConfig.coverImageRatio = '1664*928'
+        }
+        if (!queryConfig.infoGraphicType) {
+          queryConfig.infoGraphicType = 'minimalist-tech'
+        }
+        if (queryConfig.contentWordCount === undefined || queryConfig.contentWordCount === null) {
+          queryConfig.contentWordCount = 1000
+        }
+        
+        console.log('✅ 应用默认值后的配置:', JSON.stringify(queryConfig, null, 2))
         
         // 立即关闭弹窗（如果打开了）
         contentTypeDialogVisible.value = false
@@ -6390,23 +6427,36 @@ const convertImageTextToChineseKeys = (imageTextData) => {
     throw new Error('图文配置数据无效')
   }
   
+  // 辅助函数：安全获取值，即使为0或false也返回
+  const safeGet = (value, defaultValue = "") => {
+    if (value === null || value === undefined) return defaultValue
+    return value
+  }
+  
+  // 辅助函数：安全转换为字符串，即使为0也转换
+  const safeString = (value, defaultValue = "") => {
+    if (value === null || value === undefined) return defaultValue
+    if (value === 0 || value === false) return String(value)
+    return value ? String(value) : defaultValue
+  }
+  
   const payload = {
     "内容来源类型": getChineseLabel(imageTextData.contentSourceType),
     "输入内容": inputContent,
     "内容排版风格": getChineseLabel(imageTextData.contentLayoutStyle),
-    "内容排版类型-小红书爆款风格": imageTextData.contentLayoutReference || "",
+    "内容排版类型-小红书爆款风格": safeGet(imageTextData.contentLayoutReference, ""),
     "配图风格类型选择": getChineseLabel(imageTextData.imageStyleType),
-    "配图风格选择-小红书爆款参考链接": imageTextData.imageStyleReference || "",
-    "配图-比例": imageTextData.imageRatio || "",
+    "配图风格选择-小红书爆款参考链接": safeGet(imageTextData.imageStyleReference, ""),
+    "配图-比例": safeGet(imageTextData.imageRatio, ""),
     "封面图风格类型选择": getChineseLabel(imageTextData.coverStyleType),
-    "封面图风格选择-小红书爆款风格": imageTextData.coverStyleReference || "",
-    "封面图-比例": imageTextData.coverImageRatio || "",
-    "配图张数": imageTextData.imageCount ? String(imageTextData.imageCount) : "",
+    "封面图风格选择-小红书爆款风格": safeGet(imageTextData.coverStyleReference, ""),
+    "封面图-比例": safeGet(imageTextData.coverImageRatio, ""),
+    "配图张数": safeString(imageTextData.imageCount, ""),
     "生图模型": getChineseLabel(imageTextData.imageModel),
     "发布平台": getChineseLabel(imageTextData.publishPlatform),
-    "图文内容字数": imageTextData.contentWordCount ? String(imageTextData.contentWordCount) : "",
+    "图文内容字数": safeString(imageTextData.contentWordCount, ""),
     "封面图-信息图类型": getChineseLabel(imageTextData.infoGraphicType),
-    "配图风格类型选择-文章外图片-文章链接": imageTextData.externalArticleLink || "",
+    "配图风格类型选择-文章外图片-文章链接": safeGet(imageTextData.externalArticleLink, ""),
     "配图风格类型选择-文章外图片-文章来源": getChineseLabel(imageTextData.externalArticleSource),
     "submittedAt": formatDateWithOffset(),
     "formMode": "production"
