@@ -1364,8 +1364,52 @@ const handleConfirmCreateProductionTask = () => {
   if (selectedProductionType.value === 'image-text') {
     // 确保所有必填字段都有值
     const imageTextConfig = configToSend
-    console.log('📤 图文配置原始值:', JSON.stringify(imageTextConfig, null, 2))
+    
+    // 如果 inputContent 为空，从 row.note_url 获取
+    if (!imageTextConfig.inputContent && row.note_url) {
+      console.warn('⚠️ inputContent为空，从note_url获取:', row.note_url)
+      imageTextConfig.inputContent = row.note_url
+    }
+    
+    // 确保所有字段都有默认值
+    if (!imageTextConfig.contentSourceType) {
+      imageTextConfig.contentSourceType = 'other'
+    }
+    if (!imageTextConfig.contentLayoutStyle) {
+      imageTextConfig.contentLayoutStyle = 'xiaohongshu-hot'
+    }
+    if (!imageTextConfig.imageModel) {
+      imageTextConfig.imageModel = 'qianwen'
+    }
+    if (!imageTextConfig.publishPlatform) {
+      imageTextConfig.publishPlatform = 'xiaohongshu'
+    }
+    if (imageTextConfig.imageCount === undefined || imageTextConfig.imageCount === null) {
+      imageTextConfig.imageCount = 3
+    }
+    if (!imageTextConfig.imageStyleType) {
+      imageTextConfig.imageStyleType = 'builtin-ai-no'
+    }
+    if (!imageTextConfig.imageRatio) {
+      imageTextConfig.imageRatio = '1664*928'
+    }
+    if (!imageTextConfig.coverStyleType) {
+      imageTextConfig.coverStyleType = 'ai-auto'
+    }
+    if (!imageTextConfig.coverImageRatio) {
+      imageTextConfig.coverImageRatio = '1664*928'
+    }
+    if (!imageTextConfig.infoGraphicType) {
+      imageTextConfig.infoGraphicType = 'minimalist-tech'
+    }
+    if (imageTextConfig.contentWordCount === undefined || imageTextConfig.contentWordCount === null) {
+      imageTextConfig.contentWordCount = 1000
+    }
+    
+    console.log('📤 图文配置最终值:', JSON.stringify(imageTextConfig, null, 2))
+    console.log('📤 inputContent:', imageTextConfig.inputContent)
     console.log('📤 内容来源类型:', imageTextConfig.contentSourceType)
+    console.log('📤 内容排版风格:', imageTextConfig.contentLayoutStyle)
     console.log('📤 配图风格类型选择:', imageTextConfig.imageStyleType)
     console.log('📤 配图张数:', imageTextConfig.imageCount)
     console.log('📤 配图-比例:', imageTextConfig.imageRatio)

@@ -156,24 +156,23 @@ async def cookie_auth_bilibili(account_file):
 
 
 async def check_cookie(type, file_path):
-    match type:
-        # 小红书
-        case 1:
-            return await cookie_auth_xhs(Path(BASE_DIR / "cookiesFile" / file_path))
-        # 视频号
-        case 2:
-            return await cookie_auth_tencent(Path(BASE_DIR / "cookiesFile" / file_path))
-        # 抖音
-        case 3:
-            return await cookie_auth_douyin(Path(BASE_DIR / "cookiesFile" / file_path))
-        # 快手
-        case 4:
-            return await cookie_auth_ks(Path(BASE_DIR / "cookiesFile" / file_path))
-        # B站
-        case 5:
-            return await cookie_auth_bilibili(Path(BASE_DIR / "cookiesFile" / file_path))
-        case _:
-            return False
+    # 小红书
+    if type == 1:
+        return await cookie_auth_xhs(Path(BASE_DIR / "cookiesFile" / file_path))
+    # 视频号
+    elif type == 2:
+        return await cookie_auth_tencent(Path(BASE_DIR / "cookiesFile" / file_path))
+    # 抖音
+    elif type == 3:
+        return await cookie_auth_douyin(Path(BASE_DIR / "cookiesFile" / file_path))
+    # 快手
+    elif type == 4:
+        return await cookie_auth_ks(Path(BASE_DIR / "cookiesFile" / file_path))
+    # B站
+    elif type == 5:
+        return await cookie_auth_bilibili(Path(BASE_DIR / "cookiesFile" / file_path))
+    else:
+        return False
 
 # a = asyncio.run(check_cookie(1,"3a6cfdc0-3d51-11f0-8507-44e51723d63c.json"))
 # print(a)

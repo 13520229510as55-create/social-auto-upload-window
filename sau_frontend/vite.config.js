@@ -77,6 +77,115 @@ export default defineConfig({
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, '')
       },
+      // 账号管理相关 API 需要移除 /api 前缀
+      '/api/deleteAccount': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/addAccountDirect': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/updateUserinfo': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/account': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/login': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/manualConfirmLogin': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/postVideo': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/postImageText': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/postVideoBatch': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/uploadCookie': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/downloadCookie': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/generateImageText': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/deleteFile': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/upload': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/uploadSave': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/getFile': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/saveGoogleStorageMaterial': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/getGoogleFilePublicUrl': {
+        target: 'http://localhost:5409',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
       // 其他 /api 路由保持原样
       '/api': {
         target: 'http://localhost:5409',

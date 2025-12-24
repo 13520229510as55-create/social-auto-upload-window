@@ -5063,19 +5063,19 @@ onMounted(() => {
       // 图文类型的处理逻辑（自动调用webhook）
       if (queryType === 'image-text' && queryConfig) {
         console.log('✅ 检测到图文类型，准备调用图文创作接口')
-        console.log('✅ 图文配置:', JSON.stringify(queryConfig, null, 2))
-        console.log('✅ 内容来源类型:', queryConfig.contentSourceType)
-        console.log('✅ 配图风格类型选择:', queryConfig.imageStyleType)
-        console.log('✅ 配图张数:', queryConfig.imageCount)
-        console.log('✅ 配图-比例:', queryConfig.imageRatio)
-        console.log('✅ 封面图风格类型选择:', queryConfig.coverStyleType)
-        console.log('✅ 封面图-比例:', queryConfig.coverImageRatio)
-        console.log('✅ 封面图-信息图类型:', queryConfig.infoGraphicType)
-        console.log('✅ 图文内容字数:', queryConfig.contentWordCount)
+        console.log('✅ 图文配置原始值:', JSON.stringify(queryConfig, null, 2))
+        console.log('✅ 路由查询参数url:', route.query.url)
         
-        // 验证必填字段并提供默认值
+        // 如果 inputContent 为空，尝试从路由参数 url 中获取
+        if (!queryConfig.inputContent && route.query.url) {
+          console.warn('⚠️ inputContent为空，从路由参数url获取:', route.query.url)
+          queryConfig.inputContent = route.query.url
+        }
+        
+        // 验证必填字段并提供默认值（不再直接return，而是使用默认值）
         if (!queryConfig.inputContent) {
-          ElMessage.warning('图文配置缺少输入内容')
+          console.error('❌ 图文配置缺少输入内容，且无法从路由参数获取')
+          ElMessage.error('图文配置缺少输入内容，请重新配置')
           return
         }
         
@@ -5122,6 +5122,19 @@ onMounted(() => {
         }
         
         console.log('✅ 应用默认值后的配置:', JSON.stringify(queryConfig, null, 2))
+        console.log('✅ 最终字段检查:')
+        console.log('  - inputContent:', queryConfig.inputContent ? '✅' : '❌')
+        console.log('  - contentSourceType:', queryConfig.contentSourceType ? '✅' : '❌')
+        console.log('  - contentLayoutStyle:', queryConfig.contentLayoutStyle ? '✅' : '❌')
+        console.log('  - imageModel:', queryConfig.imageModel ? '✅' : '❌')
+        console.log('  - publishPlatform:', queryConfig.publishPlatform ? '✅' : '❌')
+        console.log('  - imageCount:', queryConfig.imageCount !== undefined && queryConfig.imageCount !== null ? '✅' : '❌')
+        console.log('  - imageStyleType:', queryConfig.imageStyleType ? '✅' : '❌')
+        console.log('  - imageRatio:', queryConfig.imageRatio ? '✅' : '❌')
+        console.log('  - coverStyleType:', queryConfig.coverStyleType ? '✅' : '❌')
+        console.log('  - coverImageRatio:', queryConfig.coverImageRatio ? '✅' : '❌')
+        console.log('  - infoGraphicType:', queryConfig.infoGraphicType ? '✅' : '❌')
+        console.log('  - contentWordCount:', queryConfig.contentWordCount !== undefined && queryConfig.contentWordCount !== null ? '✅' : '❌')
         
         // 立即关闭弹窗（如果打开了）
         contentTypeDialogVisible.value = false
