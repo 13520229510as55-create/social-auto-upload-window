@@ -2127,7 +2127,7 @@
     <!-- 发布视频素材选择弹窗 -->
     <el-dialog
       v-model="publishVideoMaterialDialogVisible"
-      title="选择生成素材（仅显示生成素材）"
+      title="选择素材（包含本地素材、谷歌上传素材、生成素材）"
       width="900px"
       class="material-dialog"
       :close-on-click-modal="false"
@@ -2135,13 +2135,13 @@
       <div class="material-dialog-content">
         <div v-if="availableVideoMaterials.length === 0" class="empty-materials">
           <el-empty 
-            description="暂无生成素材" 
+            description="暂无素材" 
             :image-size="100"
           >
             <template #description>
-              <p>素材库中暂无生成素材</p>
+              <p>素材库中暂无视频素材</p>
               <p style="font-size: 12px; color: #909399; margin-top: 8px;">
-                生成素材由n8n自动创建，请等待视频生成完成
+                请先在"素材管理"中上传视频素材，或等待生成素材完成
               </p>
             </template>
           </el-empty>
@@ -2166,6 +2166,7 @@
                   style="width: 120px; height: 80px; object-fit: cover; border-radius: 4px; cursor: pointer;"
                   muted
                   @click="selectVideoMaterial(scope.row)"
+                  @error="handleVideoError($event, scope.row)"
                 />
                 <div v-else class="material-placeholder" :class="{ 'selected-video-preview': isVideoMaterialSelected(scope.row) }" style="width: 120px; height: 80px; display: flex; align-items: center; justify-content: center; background: #f5f7fa; border-radius: 4px;">
                   <el-icon :size="40"><VideoCamera /></el-icon>
@@ -2180,9 +2181,12 @@
               </el-tooltip>
             </template>
           </el-table-column>
-          <el-table-column prop="source" label="来源" width="120" align="center">
+          <el-table-column prop="source" label="来源" width="140" align="center">
             <template #default="scope">
-              <el-tag :type="scope.row.source === '生成素材' ? 'success' : 'primary'" size="small">
+              <el-tag 
+                :type="scope.row.source === '生成素材' ? 'success' : (scope.row.source === '谷歌存储上传' ? 'warning' : 'primary')" 
+                size="small"
+              >
                 {{ scope.row.source || '本地上传' }}
               </el-tag>
             </template>
@@ -3299,26 +3303,44 @@ const getAccountDisplayNameById = (accountId) => {
 
 // 打开发布账号选择对话框
 const openPublishAccountDialog = async () => {
-  // 确保账号列表已加载
-  if (accountStore.accounts.length === 0) {
-    try {
-      console.log('📥 账号列表为空，正在加载账号列表...')
-      const response = await accountApi.getAccounts()
-      if (response.code === 200 && response.data) {
-        accountStore.setAccounts(response.data)
-        console.log('✅ 账号列表加载成功，总数:', accountStore.accounts.length)
-      }
-    } catch (error) {
-      console.error('加载账号列表失败:', error)
+  // 每次打开弹框时都重新加载账号列表，确保数据是最新的
+  try {
+    console.log('📥 [账号选择] 正在加载账号列表...')
+    console.log('📥 [账号选择] 当前store中的账号数量:', accountStore.accounts.length)
+    
+    const response = await accountApi.getAccounts()
+    console.log('📥 [账号选择] API响应:', {
+      code: response.code,
+      hasData: !!response.data,
+      dataLength: response.data ? response.data.length : 0,
+      data: response.data
+    })
+    
+    if (response.code === 200 && response.data) {
+      accountStore.setAccounts(response.data)
+      console.log('✅ [账号选择] 账号列表加载成功，总数:', accountStore.accounts.length)
+      console.log('📋 [账号选择] 账号列表详情:', accountStore.accounts.map(acc => ({ id: acc.id, name: acc.name, platform: acc.platform, status: acc.status })))
+    } else {
+      console.error('❌ [账号选择] 账号列表加载失败:', response)
+      ElMessage.error('加载账号列表失败: ' + (response.msg || '未知错误'))
+      // 即使加载失败，也打开弹框，让用户看到错误信息
     }
+  } catch (error) {
+    console.error('❌ [账号选择] 加载账号列表失败:', error)
+    ElMessage.error('加载账号列表失败: ' + (error.message || '未知错误'))
+    // 即使加载失败，也打开弹框，让用户看到错误信息
   }
   
-  console.log('打开账号选择对话框:', {
+  // 等待响应式更新完成
+  await nextTick()
+  
+  console.log('🔍 [账号选择] 打开账号选择对话框:', {
     platform: publishPlatformForm.platform,
     availableAccounts: availablePublishAccounts.value.length,
     allAccounts: accountStore.accounts.length,
     accounts: accountStore.accounts.map(acc => ({ id: acc.id, name: acc.name, platform: acc.platform }))
   })
+  
   publishAccountDialogVisible.value = true
 }
 
@@ -3471,22 +3493,23 @@ const openPublishAccountDialogForPlatform = async (platform) => {
   console.log('✅ [账号选择] 账号选择弹框已打开')
 }
 
-// 获取可用视频素材（从素材库中过滤视频文件，只显示生成素材）
-// 注意：这个计算属性用于制作中心发布弹框的素材选择，只显示生成素材
+// 获取可用视频素材（从素材库中过滤视频文件，包含所有类型的素材）
+// 注意：这个计算属性用于制作中心发布弹框的素材选择，显示所有类型的素材
+// 包括：本地上传、谷歌存储上传、生成素材、URL下载、以及videoFile目录中的文件
 const availableVideoMaterials = computed(() => {
   const materials = appStore.materials || []
   return materials.filter(material => {
-    // 只显示生成素材
-    if (material.source !== '生成素材') {
-      return false
-    }
-    // 过滤视频文件
+    // 不限制source类型，包含所有类型的素材
+    // 只过滤视频文件类型
     const filename = (material.filename || '').toLowerCase()
     return filename.endsWith('.mp4') || 
            filename.endsWith('.mov') || 
            filename.endsWith('.avi') || 
            filename.endsWith('.mkv') ||
-           filename.endsWith('.m4v')
+           filename.endsWith('.m4v') ||
+           filename.endsWith('.flv') ||
+           filename.endsWith('.wmv') ||
+           filename.endsWith('.webm')
   })
 })
 
@@ -3523,24 +3546,28 @@ const isVideoFile = (filename) => {
 
 // 打开发布视频素材选择弹窗
 const openPublishVideoMaterialDialog = async () => {
-  console.log('打开视频素材选择弹窗（仅显示生成素材）')
+  console.log('打开视频素材选择弹窗（显示所有素材：本地素材、谷歌上传素材、生成素材）')
   // 重置选择
   publishPlatformForm.selectedVideo = null
   
-  // 获取素材数据（只获取生成素材，每次都重新获取，确保数据最新）
+  // 获取所有素材数据（不筛选，包含所有三种类型），每次都重新获取，确保数据最新
   try {
-    const response = await materialApi.getAllMaterials('生成素材')
+    const response = await materialApi.getAllMaterials() // 不传参数，获取所有素材
     if (response.code === 200) {
-      // 只设置生成素材到store
+      // 设置所有素材到store
       appStore.setMaterials(response.data || [])
-      console.log('✅ 生成素材列表获取成功，总数:', response.data.length)
-      console.log('✅ 过滤后的视频素材数量:', availableVideoMaterials.value.length)
+      console.log('✅ 素材列表获取成功，总数:', response.data.length)
       
-      // 验证是否都是生成素材
-      const nonGeneratedMaterials = response.data.filter(m => m.source !== '生成素材')
-      if (nonGeneratedMaterials.length > 0) {
-        console.warn('⚠️ 警告：返回的素材中包含非生成素材:', nonGeneratedMaterials.length)
-      }
+      // 统计各类型素材数量
+      const generatedCount = response.data.filter(m => m.source === '生成素材').length
+      const localCount = response.data.filter(m => m.source === '本地上传' || !m.source).length
+      const googleCount = response.data.filter(m => m.source === '谷歌存储上传').length
+      console.log('✅ 素材类型分布:', {
+        生成素材: generatedCount,
+        本地上传: localCount,
+        谷歌存储上传: googleCount
+      })
+      console.log('✅ 过滤后的视频素材数量:', availableVideoMaterials.value.length)
       
       publishVideoMaterialDialogVisible.value = true
     } else {
@@ -3583,8 +3610,57 @@ const getVideoMaterialRowClassName = ({ row }) => {
   return ''
 }
 
+// 处理视频加载错误（格式不支持）
+const handleVideoError = (event, material) => {
+  console.warn('视频加载失败，可能是格式不支持:', material.filename, event)
+  ElMessage.warning({
+    message: '当前浏览器不支持此视频格式，建议上传H.264编码格式文件',
+    duration: 5000,
+    showClose: true
+  })
+}
+
+// 检测视频格式并显示提示
+const checkVideoFormat = (material) => {
+  return new Promise((resolve) => {
+    const videoUrl = material.uri || materialApi.getMaterialPreviewUrl(material.file_path.split('/').pop())
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.muted = true
+    
+    let hasError = false
+    let formatSupported = false
+    
+    // 设置超时（5秒）
+    const timeout = setTimeout(() => {
+      if (!formatSupported && !hasError) {
+        hasError = true
+        video.remove()
+        resolve(false) // 超时，可能格式不支持
+      }
+    }, 5000)
+    
+    video.addEventListener('loadedmetadata', () => {
+      clearTimeout(timeout)
+      formatSupported = true
+      video.remove()
+      resolve(true) // 格式支持
+    })
+    
+    video.addEventListener('error', (e) => {
+      clearTimeout(timeout)
+      hasError = true
+      video.remove()
+      console.warn('视频格式检测失败:', material.filename, e)
+      resolve(false) // 格式不支持
+    })
+    
+    video.src = videoUrl
+  })
+}
+
 // 选择视频素材
-const selectVideoMaterial = (material) => {
+const selectVideoMaterial = async (material) => {
   // 保存完整的素材信息，包括uri和file_path
   console.log('📦 原始素材数据:', material)
   publishPlatformForm.selectedVideo = {
@@ -3603,6 +3679,25 @@ const selectVideoMaterial = (material) => {
     file_path: publishPlatformForm.selectedVideo.file_path,
     path: publishPlatformForm.selectedVideo.path,
     source: publishPlatformForm.selectedVideo.source
+  })
+  
+  // 异步检测视频格式（不阻塞选择操作）
+  checkVideoFormat(material).then((isSupported) => {
+    if (!isSupported) {
+      ElMessage.warning({
+        message: '当前浏览器不支持此视频格式，建议上传H.264编码格式文件',
+        duration: 5000,
+        showClose: true
+      })
+    }
+  }).catch((error) => {
+    console.error('视频格式检测出错:', error)
+    // 检测失败时也显示提示，以防万一
+    ElMessage.warning({
+      message: '当前浏览器不支持此视频格式，建议上传H.264编码格式文件',
+      duration: 5000,
+      showClose: true
+    })
   })
 }
 

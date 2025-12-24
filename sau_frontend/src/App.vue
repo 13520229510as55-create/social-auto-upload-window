@@ -107,6 +107,12 @@
                 <span>素材管理</span>
               </el-menu-item>
               
+              <!-- 配置管理（二级菜单，移动到制作中心） -->
+              <el-menu-item index="/production/config">
+                <el-icon><Setting /></el-icon>
+                <span>配置管理</span>
+              </el-menu-item>
+              
               <!-- 数据列表（二级菜单） -->
               <el-menu-item index="/production/data">
                 <el-icon><DataBoard /></el-icon>
@@ -125,12 +131,6 @@
               <el-menu-item index="/publish/overview">
                 <el-icon><Odometer /></el-icon>
                 <span>总览</span>
-              </el-menu-item>
-              
-              <!-- 配置管理（二级菜单） -->
-              <el-menu-item index="/publish/config">
-                <el-icon><Setting /></el-icon>
-                <span>配置管理</span>
               </el-menu-item>
               
               <!-- 数据列表（二级菜单） -->
@@ -269,10 +269,13 @@ const activeMenu = computed(() => {
   // 处理制作中心路由，确保子路由也能正确激活父菜单
   if (path.startsWith('/production/')) {
     // 对于子路由，返回父路由路径以激活父菜单
-    if (path !== '/production/overview' && path !== '/production/materials' && path !== '/production/data') {
+    if (path !== '/production/overview' && path !== '/production/materials' && path !== '/production/config' && path !== '/production/data') {
       // 带参数的路由，提取基础路径
       if (path.startsWith('/production/materials/')) {
         return '/production/materials'
+      }
+      if (path.startsWith('/production/config/')) {
+        return '/production/config'
       }
       if (path.startsWith('/production/data/')) {
         return '/production/data'
@@ -282,11 +285,8 @@ const activeMenu = computed(() => {
   // 处理发布中心路由，确保子路由也能正确激活父菜单
   if (path.startsWith('/publish/')) {
     // 对于子路由，返回父路由路径以激活父菜单
-    if (path !== '/publish/overview' && path !== '/publish/config' && path !== '/publish/data-list') {
+    if (path !== '/publish/overview' && path !== '/publish/data-list') {
       // 带参数的路由，提取基础路径
-      if (path.startsWith('/publish/config/')) {
-        return '/publish/config'
-      }
       if (path.startsWith('/publish/data-list/')) {
         return '/publish/data-list'
       }
@@ -320,19 +320,19 @@ const getPageTitle = (path) => {
     '/crawler/data': '数据列表',
     '/crawler/hotspot-center': '热点中心',
     '/publish/overview': '发布中心总览',
-    '/publish/config': '配置管理',
     '/publish/data-list': '数据列表',
     '/production/overview': '制作中心总览',
     '/production/materials': '素材管理',
+    '/production/config': '配置管理',
     '/production/data': '数据列表'
   }
   // 处理带参数的路由
   if (path.startsWith('/crawler/config')) return '配置管理'
   if (path.startsWith('/crawler/data')) return '数据列表'
   if (path.startsWith('/crawler/hotspot-center')) return '热点中心'
-  if (path.startsWith('/publish/config')) return '配置管理'
   if (path.startsWith('/publish/data-list')) return '数据列表'
   if (path.startsWith('/production/materials')) return '素材管理'
+  if (path.startsWith('/production/config')) return '配置管理'
   if (path.startsWith('/production/data')) return '数据列表'
   return titleMap[path] || null
 }

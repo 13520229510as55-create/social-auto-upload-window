@@ -336,7 +336,7 @@ watch(fileList, (newList) => {
 
 
 // 获取素材列表
-const fetchMaterials = async () => {
+const fetchMaterials = async (autoSwitchTab = false) => {
   isRefreshing.value = true
   try {
     const response = await materialApi.getAllMaterials()
@@ -350,8 +350,8 @@ const fetchMaterials = async () => {
         generated: response.data.filter(m => m.source === '生成素材').length
       })
       
-      // 如果当前 tab 没有数据，自动切换到有数据的 tab
-      if (response.data.length > 0) {
+      // 只有在初始化时（autoSwitchTab=true）才自动切换tab，刷新时保持当前tab
+      if (autoSwitchTab && response.data.length > 0) {
         const hasLocal = response.data.some(m => !m.source || m.source === '本地上传')
         const hasGoogle = response.data.some(m => m.source === '谷歌存储上传')
         const hasGenerated = response.data.some(m => m.source === '生成素材')
@@ -842,12 +842,12 @@ const submitGoogleUpload = async () => {
 
 // 组件挂载时获取素材列表
 onMounted(async () => {
-  // 只有store中没有数据时才获取
+  // 只有store中没有数据时才获取，初始化时允许自动切换tab
   if (appStore.materials.length === 0) {
-    await fetchMaterials()
+    await fetchMaterials(true) // 传入true，允许自动切换tab
   }
   
-  // 根据数据自动切换到有数据的 tab
+  // 根据数据自动切换到有数据的 tab（仅在初始化时）
   if (appStore.materials.length > 0) {
     // 检查哪个 tab 有数据
     const hasLocal = appStore.materials.some(m => !m.source || m.source === '本地上传')

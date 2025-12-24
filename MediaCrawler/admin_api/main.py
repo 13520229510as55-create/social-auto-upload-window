@@ -40,9 +40,15 @@ try:
             finally:
                 os.chdir(original_cwd)
         except Exception as e:
-            print(f"警告: MediaCrawler主模块导入失败: {e}")
-            import traceback
-            traceback.print_exc()
+            # 如果是缺少依赖（如typer），只显示警告，不打印完整堆栈
+            error_msg = str(e)
+            if "No module named" in error_msg or "ModuleNotFoundError" in error_msg:
+                print(f"警告: MediaCrawler主模块导入失败（缺少依赖）: {e}")
+                print(f"提示: 如需完整功能，请安装依赖: pip install -r requirements.txt")
+            else:
+                print(f"警告: MediaCrawler主模块导入失败: {e}")
+                import traceback
+                traceback.print_exc()
             CrawlerFactory = None
     else:
         CrawlerFactory = None
@@ -225,11 +231,22 @@ async def save_platform_config(platform: str, config_data: PlatformConfig):
 
 
 try:
-    from login_service import login_service
+    # 尝试相对导入
+    from .login_service import login_service
     print("✓ 登录服务模块加载成功")
 except ImportError as e:
-    # 如果导入失败，创建一个简单的mock
-    print(f"警告: 登录服务模块导入失败: {e}")
+    try:
+        # 尝试绝对导入
+        from MediaCrawler.admin_api.login_service import login_service
+        print("✓ 登录服务模块加载成功（绝对导入）")
+    except ImportError as e2:
+        try:
+            # 尝试直接导入（当前目录）
+            from login_service import login_service
+            print("✓ 登录服务模块加载成功（直接导入）")
+        except ImportError as e3:
+            # 如果导入失败，创建一个简单的mock
+            print(f"警告: 登录服务模块导入失败: {e}, {e2}, {e3}")
     class MockLoginService:
         async def get_qrcode(self, platform): 
             return {
@@ -1047,11 +1064,22 @@ async def get_dashboard_stats():
 # ==================== 微信公众号相关 API ====================
 
 try:
-    from wechat_service import wechat_service
+    # 尝试相对导入
+    from .wechat_service import wechat_service
     print("✓ 微信公众号服务模块加载成功")
 except ImportError as e:
-    print(f"警告: 微信公众号服务模块导入失败: {e}")
-    wechat_service = None
+    try:
+        # 尝试绝对导入
+        from MediaCrawler.admin_api.wechat_service import wechat_service
+        print("✓ 微信公众号服务模块加载成功（绝对导入）")
+    except ImportError as e2:
+        try:
+            # 尝试直接导入（当前目录）
+            from wechat_service import wechat_service
+            print("✓ 微信公众号服务模块加载成功（直接导入）")
+        except ImportError as e3:
+            print(f"警告: 微信公众号服务模块导入失败: {e}, {e2}, {e3}")
+            wechat_service = None
 
 
 @app.post("/api/wechat/login/create-url")

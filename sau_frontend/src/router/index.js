@@ -59,15 +59,6 @@ const routes = [
     }
   },
   {
-    path: '/publish/config',
-    name: 'PublishConfig',
-    component: PublishConfig,
-    meta: {
-      requiresAuth: true,
-      title: '配置管理'
-    }
-  },
-  {
     path: '/publish/data-list',
     name: 'PublishDataList',
     component: PublishDataList,
@@ -96,6 +87,15 @@ const routes = [
     }
   },
   {
+    path: '/production/config',
+    name: 'ProductionConfig',
+    component: PublishConfig,
+    meta: {
+      requiresAuth: true,
+      title: '配置管理'
+    }
+  },
+  {
     path: '/production/data',
     name: 'ProductionData',
     component: ProductionCenter,
@@ -116,6 +116,10 @@ const routes = [
   {
     path: '/production-center',
     redirect: '/production/overview'
+  },
+  {
+    path: '/publish/config',
+    redirect: '/production/config'
   },
   // 热点中心已移动到爬虫管理下
   {

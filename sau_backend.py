@@ -248,15 +248,28 @@ def get_all_files():
     支持筛选参数: source (可选，如: '生成素材', '本地上传', '谷歌存储上传')
     """
     try:
-        # 获取筛选参数（处理URL编码）
+        # 获取筛选参数（处理URL编码和嵌套参数格式）
+        # 支持两种格式：
+        # 1. ?source=生成素材 (直接参数)
+        # 2. ?params[source]=生成素材 (嵌套参数，axios默认格式)
         source_filter = request.args.get('source', '').strip()
+        
+        # 如果直接参数为空，尝试从嵌套参数获取
+        if not source_filter:
+            # 尝试获取 params[source] 格式的参数
+            params_source = request.args.get('params[source]', '').strip()
+            if params_source:
+                source_filter = params_source
+        
+        # 如果参数是URL编码的，尝试解码
         if source_filter:
-            # 如果参数是URL编码的，尝试解码
             try:
                 import urllib.parse
                 source_filter = urllib.parse.unquote(source_filter)
             except:
                 pass
+        
+        print(f"📋 [getFiles] 接收到的source筛选参数: '{source_filter}'")
         
         # 使用 with 自动管理数据库连接
         with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
@@ -282,6 +295,15 @@ def get_all_files():
                 cursor.execute("SELECT * FROM file_records")
             rows = cursor.fetchall()
             
+            # 获取数据库中已有的file_path列表（用于去重）
+            db_file_paths = set()
+            for row in rows:
+                file_path = row['file_path'] if 'file_path' in row.keys() else None
+                if file_path:
+                    db_file_paths.add(file_path)
+            
+            print(f"📊 [getFiles] 数据库中的file_path数量: {len(db_file_paths)}")
+            
             # 将结果转为字典列表，并提取UUID
             data = []
             for row in rows:
@@ -301,6 +323,91 @@ def get_all_files():
                 if 'uri' not in row_dict:
                     row_dict['uri'] = None
                 data.append(row_dict)
+            
+            # 如果没有筛选条件，添加videoFile目录中的所有本地视频文件
+            # 无论是否在数据库中，都包含videoFile目录中的文件（因为用户要求包含所有本地素材）
+            if not source_filter:
+                video_file_dir = Path(BASE_DIR / "videoFile")
+                print(f"📁 [getFiles] 检查videoFile目录: {video_file_dir}")
+                print(f"📁 [getFiles] 目录是否存在: {video_file_dir.exists()}")
+                
+                if video_file_dir.exists():
+                    # 支持的视频文件扩展名
+                    video_extensions = {'.mp4', '.mov', '.avi', '.mkv', '.m4v', '.flv', '.wmv', '.webm'}
+                    
+                    # 获取数据库中已有的file_path集合（用于检查是否已存在）
+                    existing_file_paths = set()
+                    for item in data:
+                        if item.get('file_path'):
+                            existing_file_paths.add(item['file_path'])
+                    
+                    video_files_found = 0
+                    video_files_added = 0
+                    
+                    for file_path in video_file_dir.iterdir():
+                        # 跳过隐藏文件（以.开头的文件，如macOS的._文件）
+                        if file_path.name.startswith('._'):
+                            continue
+                            
+                        if file_path.is_file() and file_path.suffix.lower() in video_extensions:
+                            video_files_found += 1
+                            file_name = file_path.name
+                            
+                            # 检查这个文件是否已经在data列表中
+                            # 数据库中的file_path是完整文件名（包含UUID前缀），如：uuid_filename.mp4
+                            # 目录中的文件名也是完整文件名，所以直接比较file_path即可
+                            file_already_in_data = False
+                            for existing_item in data:
+                                existing_file_path = existing_item.get('file_path', '')
+                                existing_filename = existing_item.get('filename', '')
+                                
+                                # 完全匹配file_path（最常见的情况）
+                                if existing_file_path == file_name:
+                                    file_already_in_data = True
+                                    break
+                                # file_path以文件名结尾（格式：uuid_filename，但file_path可能包含路径）
+                                if existing_file_path.endswith('_' + file_name) or existing_file_path.endswith('/' + file_name):
+                                    file_already_in_data = True
+                                    break
+                                # filename匹配（如果filename就是完整文件名）
+                                if existing_filename == file_name:
+                                    file_already_in_data = True
+                                    break
+                            
+                            # 如果文件不在data列表中，添加到列表
+                            if not file_already_in_data:
+                                print(f"🔍 [getFiles] 文件不在数据列表中，准备添加: {file_name}")
+                                video_files_added += 1
+                                # 从文件名提取UUID（如果有，格式：uuid_filename）
+                                file_path_parts = file_name.split('_', 1)
+                                uuid_part = file_path_parts[0] if len(file_path_parts) > 1 and len(file_path_parts[0]) == 36 else ''
+                                
+                                # 获取文件大小（MB）
+                                try:
+                                    file_size_mb = file_path.stat().st_size / (1024 * 1024)
+                                except Exception as e:
+                                    print(f"⚠️ [getFiles] 获取文件大小失败: {file_name}, 错误: {str(e)}")
+                                    file_size_mb = 0
+                                
+                                # 创建本地素材记录
+                                local_material = {
+                                    'id': None,  # 不在数据库中，所以没有ID
+                                    'filename': file_name,
+                                    'file_path': file_name,
+                                    'filesize': round(file_size_mb, 2),
+                                    'source': '本地上传',
+                                    'uri': None,
+                                    'upload_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                    'uuid': uuid_part
+                                }
+                                data.append(local_material)
+                                print(f"✅ [getFiles] 添加本地videoFile目录中的文件: {file_name} ({file_size_mb:.2f} MB)")
+                            else:
+                                print(f"ℹ️ [getFiles] 文件已在数据列表中，跳过: {file_name}")
+                    
+                    print(f"📊 [getFiles] videoFile目录中找到 {video_files_found} 个视频文件，添加了 {video_files_added} 个新文件")
+                else:
+                    print(f"⚠️ [getFiles] videoFile目录不存在: {video_file_dir}")
 
             return jsonify({
                 "code": 200,
@@ -366,7 +473,15 @@ def save_google_storage_material():
                 VALUES (?, ?, ?, ?, ?)
             ''', (final_filename, filesize, file_path, '谷歌存储上传', uri))
             conn.commit()
-            print("✅ 谷歌存储上传文件已记录")
+            print(f"✅ 谷歌存储上传文件已记录: filename={final_filename}, file_path={file_path}, source=谷歌存储上传, uri={uri}")
+            
+            # 验证插入是否成功
+            cursor.execute('SELECT id, filename, source, uri FROM file_records WHERE file_path = ?', (file_path,))
+            inserted_record = cursor.fetchone()
+            if inserted_record:
+                print(f"✅ 验证：记录已成功插入，ID={inserted_record[0]}, source={inserted_record[2]}")
+            else:
+                print(f"⚠️ 警告：记录插入后查询不到，可能插入失败")
         
         return jsonify({
             "code": 200,
@@ -459,33 +574,116 @@ def get_google_file_public_url():
             "data": None
         }), 500
 
+@app.route("/health", methods=['GET'])
+def health_check():
+    """健康检查端点"""
+    try:
+        return jsonify({
+            "code": 200,
+            "msg": "服务运行正常",
+            "data": {
+                "base_dir": str(BASE_DIR),
+                "db_dir": str(Path(BASE_DIR / "db")),
+                "db_exists": Path(BASE_DIR / "db" / "database.db").exists()
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "code": 500,
+            "msg": f"健康检查失败: {str(e)}",
+            "data": None
+        }), 500
+
 @app.route("/getAccounts", methods=['GET'])
 def getAccounts():
     """快速获取所有账号信息，不进行cookie验证"""
     try:
-        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute('''
-            SELECT * FROM user_info''')
-            rows = cursor.fetchall()
-            rows_list = [list(row) for row in rows]
+        print(f"[getAccounts] 收到请求，BASE_DIR: {BASE_DIR}")
+        
+        # 确保数据库目录存在
+        db_dir = Path(BASE_DIR / "db")
+        try:
+            db_dir.mkdir(parents=True, exist_ok=True)
+            print(f"[getAccounts] 数据库目录: {db_dir}")
+        except Exception as e:
+            print(f"❌ [getAccounts] 创建数据库目录失败: {str(e)}")
+            return jsonify({
+                "code": 500,
+                "msg": f"创建数据库目录失败: {str(e)}",
+                "data": None
+            }), 500
+        
+        db_path = db_dir / "database.db"
+        print(f"[getAccounts] 数据库路径: {db_path}")
+        
+        try:
+            with sqlite3.connect(str(db_path), timeout=10) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # 检查表是否存在，如果不存在则创建
+                try:
+                    cursor.execute('''
+                        SELECT name FROM sqlite_master 
+                        WHERE type='table' AND name='user_info'
+                    ''')
+                    table_exists = cursor.fetchone()
+                    
+                    if not table_exists:
+                        print("⚠️ [getAccounts] user_info 表不存在，正在创建...")
+                        cursor.execute('''
+                            CREATE TABLE IF NOT EXISTS user_info (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                type INTEGER NOT NULL,
+                                filePath TEXT NOT NULL,
+                                userName TEXT NOT NULL,
+                                status INTEGER DEFAULT 0
+                            )
+                        ''')
+                        conn.commit()
+                        print("✅ [getAccounts] user_info 表创建成功")
+                    else:
+                        print("✅ [getAccounts] user_info 表已存在")
+                except sqlite3.Error as e:
+                    print(f"❌ [getAccounts] 检查/创建表时出错: {str(e)}")
+                    raise
+                
+                # 查询数据
+                try:
+                    cursor.execute('SELECT * FROM user_info')
+                    rows = cursor.fetchall()
+                    rows_list = [dict(row) for row in rows]  # 使用dict而不是list，更符合JSON格式
 
-            print("\n📋 当前数据表内容（快速获取）：")
-            for row in rows:
-                print(row)
+                    print(f"📋 [getAccounts] 当前数据表内容（共 {len(rows_list)} 条记录）")
+                    for row in rows_list:
+                        print(f"  - {row}")
 
-            return jsonify(
-                {
-                    "code": 200,
-                    "msg": None,
-                    "data": rows_list
-                }), 200
+                    return jsonify({
+                        "code": 200,
+                        "msg": None,
+                        "data": rows_list
+                    }), 200
+                except sqlite3.Error as e:
+                    print(f"❌ [getAccounts] 查询数据时出错: {str(e)}")
+                    raise
+        except sqlite3.Error as e:
+            error_msg = f"数据库错误: {str(e)}"
+            print(f"❌ [getAccounts] 数据库操作失败: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                "code": 500,
+                "msg": error_msg,
+                "data": None
+            }), 500
     except Exception as e:
-        print(f"获取账号列表时出错: {str(e)}")
+        error_msg = f"获取账号列表失败: {str(e)}"
+        print(f"❌ [getAccounts] 未知错误: {error_msg}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "code": 500,
-            "msg": f"获取账号列表失败: {str(e)}",
+            "msg": error_msg,
             "data": None
         }), 500
 
@@ -3678,9 +3876,62 @@ def login():
     response.headers['Access-Control-Allow-Headers'] = 'Cache-Control'
     return response
 
+def save_url_to_file_mapping(url, filename, file_size_mb=0):
+    """
+    保存URL到文件名的映射关系到数据库（用于缓存）
+    重要：使用原始URL（如Google URL）作为缓存key，本地文件名作为value
+    
+    Args:
+        url: 原始URL（如 https://storage.googleapis.com/...），作为缓存的key
+        filename: 下载后在39服务器本地存储的文件名（如 xxx_xxx.mp4），作为缓存的value
+        file_size_mb: 文件大小（MB）
+    """
+    try:
+        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+            cursor = conn.cursor()
+            
+            # 确保表中有uri字段
+            try:
+                cursor.execute("SELECT uri FROM file_records LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE file_records ADD COLUMN uri TEXT")
+                conn.commit()
+            
+            # 检查是否已存在相同的URL记录（使用原始URL作为key）
+            cursor.execute('SELECT id FROM file_records WHERE uri = ? AND file_path = ?', (url, filename))
+            existing = cursor.fetchone()
+            
+            if not existing:
+                # 从文件名中提取原始文件名（去掉UUID前缀）
+                original_filename = filename
+                if '_' in filename:
+                    parts = filename.split('_', 1)
+                    if len(parts) > 1:
+                        original_filename = parts[1]
+                
+                # 插入新记录
+                # uri字段存储原始URL（作为缓存key），file_path存储本地文件名（作为缓存value）
+                cursor.execute('''
+                    INSERT INTO file_records (filename, filesize, file_path, source, uri)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (original_filename, file_size_mb, filename, 'URL下载', url))
+                conn.commit()
+                print(f"💾 [缓存] URL映射已保存")
+                print(f"   Key (原始URL): {url}")
+                print(f"   Value (本地文件): {filename}")
+            else:
+                print(f"💾 [缓存] URL映射已存在，跳过保存")
+                print(f"   Key (原始URL): {url}")
+                print(f"   Value (本地文件): {filename}")
+    except Exception as e:
+        print(f"⚠️ [缓存] 保存URL映射失败: {str(e)}")
+
+
 def download_video_from_url(url, output_dir=None, max_retries=3):
     """
     从URL下载视频到本地（带重试机制）
+    如果是外网URL（如Google服务），会通过代理服务器150.107.38.113下载
+    支持URL缓存：如果之前下载过相同的URL，直接使用已下载的文件
     Args:
         url: 视频URL（如谷歌云存储链接）
         output_dir: 输出目录，默认为 videoFile 目录
@@ -3688,6 +3939,205 @@ def download_video_from_url(url, output_dir=None, max_retries=3):
     Returns:
         下载后的本地文件名（相对于videoFile目录）
     """
+    print(f"🚀 [download_video_from_url] 函数被调用，URL: {url}")
+    
+    # 检查URL缓存：使用原始URL（如Google URL）作为缓存key
+    # 如果之前下载过相同的原始URL，直接使用已下载的本地文件
+    original_url = url  # 保存原始URL，确保始终使用原始URL作为缓存key
+    print(f"🔑 [缓存检查] 使用原始URL作为缓存key: {original_url}")
+    
+    try:
+        with sqlite3.connect(Path(BASE_DIR / "db" / "database.db")) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # 确保表中有uri字段
+            try:
+                cursor.execute("SELECT uri FROM file_records LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE file_records ADD COLUMN uri TEXT")
+                conn.commit()
+            
+            # 使用原始URL查询缓存记录（uri字段存储的是原始URL，如Google URL）
+            cursor.execute('''
+                SELECT file_path, filename
+                FROM file_records
+                WHERE uri = ?
+                ORDER BY upload_time DESC
+                LIMIT 1
+            ''', (original_url,))
+            
+            cached_record = cursor.fetchone()
+            if cached_record:
+                cached_file_path = cached_record['file_path']  # 这是39服务器本地存储的文件名
+                cached_filename = cached_record['filename']
+                
+                # 检查文件是否还存在
+                if output_dir is None:
+                    output_dir = Path(BASE_DIR / "videoFile")
+                else:
+                    output_dir = Path(output_dir)
+                
+                cached_file_full_path = output_dir / cached_file_path
+                if cached_file_full_path.exists():
+                    file_size_mb = cached_file_full_path.stat().st_size / (1024 * 1024)
+                    print(f"✅ [缓存命中] 找到已下载的文件")
+                    print(f"   缓存Key (原始URL): {original_url}")
+                    print(f"   缓存Value (本地文件): {cached_file_path}")
+                    print(f"   文件大小: {file_size_mb:.2f} MB")
+                    print(f"   跳过下载，直接使用本地文件")
+                    return cached_file_path
+                else:
+                    print(f"⚠️ [缓存失效] 数据库中有记录但文件不存在: {cached_file_path}")
+                    print(f"   将删除无效的缓存记录，重新下载")
+                    # 删除无效的缓存记录
+                    cursor.execute('DELETE FROM file_records WHERE uri = ? AND file_path = ?', (original_url, cached_file_path))
+                    conn.commit()
+            else:
+                print(f"ℹ️ [缓存未命中] 原始URL未在缓存中找到: {original_url}")
+                print(f"   将执行下载流程")
+    except Exception as e:
+        print(f"⚠️ [缓存检查] 检查URL缓存时出错: {str(e)}，继续下载流程")
+    
+    # 检查是否是外网URL（需要代理的URL）
+    parsed_url = urlparse(url)
+    print(f"🔍 [DEBUG] URL解析: netloc={parsed_url.netloc}, url={url}")
+    is_foreign_url = any(domain in parsed_url.netloc.lower() for domain in [
+        'googleapis.com', 'google.com', 'storage.googleapis.com',
+        'youtube.com', 'youtu.be', 'facebook.com', 'instagram.com'
+    ])
+    print(f"🔍 [DEBUG] is_foreign_url检测结果: {is_foreign_url}")
+    
+    # 如果是外网URL，通过代理服务器下载
+    if is_foreign_url:
+        print(f"🌐 检测到外网URL，通过代理服务器下载: {url}")
+        try:
+            proxy_server = "http://150.107.38.113:5409"
+            download_api = f"{proxy_server}/downloadVideo"
+            
+            print(f"📤 请求代理服务器下载: {download_api}")
+            response = requests.post(
+                download_api,
+                json={"url": url},
+                timeout=900  # 15分钟超时
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("code") == 200:
+                    data = result.get("data", {})
+                    remote_filename = data.get("filename")
+                    
+                    if remote_filename:
+                        # 从代理服务器下载文件到本地（带重试机制，因为文件可能还在下载中）
+                        file_api = f"{proxy_server}/videoFile/{remote_filename}"
+                        print(f"📥 从代理服务器下载文件: {file_api}")
+                        
+                        # 重试机制：等待文件在150机器上准备好
+                        import time as time_module  # 明确导入time模块，避免作用域问题
+                        max_file_retries = 20  # 最多重试20次（总共最多等待2分钟）
+                        retry_delay = 6  # 每次重试间隔6秒（20次 × 6秒 = 120秒 = 2分钟）
+                        
+                        file_response = None
+                        for file_retry in range(max_file_retries):
+                            try:
+                                # 使用HEAD请求先检查文件是否存在和获取大小
+                                head_response = requests.head(file_api, timeout=10)
+                                if head_response.status_code == 200:
+                                    # 文件存在，使用GET请求下载（带进度显示）
+                                    file_response = requests.get(file_api, stream=True, timeout=300)
+                                    if file_response.status_code == 200:
+                                        break
+                                    else:
+                                        file_response.raise_for_status()
+                                elif head_response.status_code == 404:
+                                    if file_retry < max_file_retries - 1:
+                                        print(f"⏳ 文件尚未准备好，等待 {retry_delay} 秒后重试 ({file_retry + 1}/{max_file_retries})...")
+                                        time_module.sleep(retry_delay)
+                                        continue
+                                    else:
+                                        raise Exception(f"文件在代理服务器上不存在（404），已重试 {max_file_retries} 次")
+                                else:
+                                    head_response.raise_for_status()
+                            except requests.exceptions.RequestException as e:
+                                if file_retry < max_file_retries - 1:
+                                    print(f"⏳ 获取文件失败，等待 {retry_delay} 秒后重试 ({file_retry + 1}/{max_file_retries}): {str(e)}")
+                                    time_module.sleep(retry_delay)
+                                    continue
+                                else:
+                                    raise
+                        
+                        if file_response is None or file_response.status_code != 200:
+                            raise Exception(f"无法从代理服务器获取文件，已重试 {max_file_retries} 次")
+                        
+                        file_response.raise_for_status()
+                        
+                        # 保存到本地（带进度显示）
+                        if output_dir is None:
+                            output_dir = Path(BASE_DIR / "videoFile")
+                        else:
+                            output_dir = Path(output_dir)
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        local_filepath = output_dir / remote_filename
+                        
+                        # 获取文件总大小（用于显示进度）
+                        total_size = int(file_response.headers.get('content-length', 0))
+                        if total_size > 0:
+                            print(f"📦 文件大小: {total_size / (1024*1024):.2f} MB")
+                        
+                        # 流式下载并显示进度
+                        downloaded_size = 0
+                        chunk_size = 64 * 1024  # 64KB chunks
+                        
+                        print(f"📥 开始从代理服务器下载文件...")
+                        with open(local_filepath, 'wb') as f:
+                            for chunk in file_response.iter_content(chunk_size=chunk_size):
+                                if chunk:
+                                    f.write(chunk)
+                                    downloaded_size += len(chunk)
+                                    
+                                    # 显示下载进度（每10MB或完成时显示）
+                                    if total_size > 0:
+                                        progress = (downloaded_size / total_size) * 100
+                                        # 每10MB打印一次进度，或者接近完成时（>95%）
+                                        if downloaded_size % (10 * 1024 * 1024) < chunk_size or progress >= 95:
+                                            print(f"📥 下载进度: {progress:.1f}% ({downloaded_size / (1024*1024):.2f} MB / {total_size / (1024*1024):.2f} MB)")
+                                    else:
+                                        # 如果无法获取总大小，每10MB显示一次已下载大小
+                                        if downloaded_size % (10 * 1024 * 1024) < chunk_size:
+                                            print(f"📥 已下载: {downloaded_size / (1024*1024):.2f} MB")
+                        
+                        # 验证文件是否完整下载
+                        if total_size > 0 and downloaded_size != total_size:
+                            raise Exception(f"文件下载不完整: 已下载 {downloaded_size} 字节，期望 {total_size} 字节")
+                        
+                        print(f"✅ 文件已从代理服务器下载到本地: {remote_filename} ({downloaded_size / (1024*1024):.2f} MB)")
+                        
+                        # 保存URL映射到数据库（用于缓存）
+                        # key: 原始URL（如Google URL），value: 39服务器本地存储的文件名
+                        try:
+                            file_size_mb = local_filepath.stat().st_size / (1024 * 1024)
+                            print(f"💾 [缓存保存] 保存URL映射: 原始URL -> 本地文件名")
+                            print(f"   Key (原始URL): {url}")
+                            print(f"   Value (本地文件): {remote_filename}")
+                            save_url_to_file_mapping(url, remote_filename, file_size_mb)
+                        except Exception as e:
+                            print(f"⚠️ 保存URL映射失败: {str(e)}")
+                        
+                        return remote_filename
+                    else:
+                        raise Exception("代理服务器返回的文件名为空")
+                else:
+                    raise Exception(f"代理服务器下载失败: {result.get('msg', '未知错误')}")
+            else:
+                raise Exception(f"代理服务器请求失败: HTTP {response.status_code}")
+                
+        except Exception as e:
+            print(f"⚠️ 通过代理服务器下载失败: {str(e)}")
+            print(f"🔄 尝试直接下载（可能失败）...")
+            # 继续执行下面的直接下载逻辑
+    
     if output_dir is None:
         output_dir = Path(BASE_DIR / "videoFile")
     else:
@@ -3813,6 +4263,18 @@ def download_video_from_url(url, output_dir=None, max_retries=3):
             
             print(f"✅ 视频下载完成: {local_filename} ({downloaded_size / (1024*1024):.2f} MB)")
             session.close()
+            
+            # 保存URL映射到数据库（用于缓存）
+            # key: 原始URL，value: 本地存储的文件名
+            try:
+                file_size_mb = downloaded_size / (1024 * 1024)
+                print(f"💾 [缓存保存] 保存URL映射: 原始URL -> 本地文件名")
+                print(f"   Key (原始URL): {url}")
+                print(f"   Value (本地文件): {local_filename}")
+                save_url_to_file_mapping(url, local_filename, file_size_mb)
+            except Exception as e:
+                print(f"⚠️ 保存URL映射失败: {str(e)}")
+            
             return local_filename
             
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, 
@@ -3874,6 +4336,18 @@ def download_video_from_url(url, output_dir=None, max_retries=3):
                     
                     print(f"✅ 视频下载完成: {local_filename} ({downloaded_size / (1024*1024):.2f} MB)")
                     session.close()
+                    
+                    # 保存URL映射到数据库（用于缓存）
+                    # key: 原始URL，value: 本地存储的文件名
+                    try:
+                        file_size_mb = downloaded_size / (1024 * 1024)
+                        print(f"💾 [缓存保存] 保存URL映射: 原始URL -> 本地文件名")
+                        print(f"   Key (原始URL): {url}")
+                        print(f"   Value (本地文件): {local_filename}")
+                        save_url_to_file_mapping(url, local_filename, file_size_mb)
+                    except Exception as e:
+                        print(f"⚠️ 保存URL映射失败: {str(e)}")
+                    
                     return local_filename
                 except Exception as ssl_e:
                     print(f"❌ 即使禁用 SSL 验证也失败: {str(ssl_e)}")

@@ -16,15 +16,31 @@ export const useAccountStore = defineStore('account', () => {
   // 设置账号列表
   const setAccounts = (accountsData) => {
     // 转换后端返回的数据格式为前端使用的格式
+    // 后端可能返回数组数组格式 [id, type, filePath, userName, status] 或对象格式 {id, type, filePath, userName, status}
     accounts.value = accountsData.map(item => {
-      return {
-        id: item[0],
-        type: item[1],
-        filePath: item[2],
-        name: item[3],
-        status: item[4] === 1 ? '正常' : '异常',
-        platform: platformTypes[item[1]] || '未知',
-        avatar: '/vite.svg' // 默认使用vite.svg作为头像
+      // 判断是数组格式还是对象格式
+      if (Array.isArray(item)) {
+        // 数组格式：[id, type, filePath, userName, status]
+        return {
+          id: item[0],
+          type: item[1],
+          filePath: item[2],
+          name: item[3],
+          status: item[4] === 1 ? '正常' : '异常',
+          platform: platformTypes[item[1]] || '未知',
+          avatar: '/vite.svg'
+        }
+      } else {
+        // 对象格式：{id, type, filePath, userName, status}
+        return {
+          id: item.id,
+          type: item.type,
+          filePath: item.filePath,
+          name: item.userName || item.name,
+          status: item.status === 1 ? '正常' : '异常',
+          platform: platformTypes[item.type] || '未知',
+          avatar: '/vite.svg'
+        }
       }
     })
   }

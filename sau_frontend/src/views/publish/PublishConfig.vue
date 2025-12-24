@@ -542,7 +542,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 
 // 验证定时器（用于清理）
 let validationTimer = null
@@ -678,25 +678,37 @@ const autoAddPlatformsToFilters = (accounts) => {
       }
     }
   })
+  
+  // 确保每个Tab都有一个选中的平台（如果没有选中，则选择第一个可用的）
+  ['image-text', 'article', 'video'].forEach(contentType => {
+    if (!selectedPlatforms[contentType] && filterOptions.value[contentType]?.length > 0) {
+      selectedPlatforms[contentType] = filterOptions.value[contentType][0]
+    }
+  })
 }
 
 // 获取账号数据（快速，不验证）
 const fetchAccountsQuick = async () => {
   try {
     const res = await accountApi.getAccounts()
-    if (res.code === 200 && res.data) {
-      // 将所有账号的状态暂时设为"验证中"
-      const accountsWithPendingStatus = res.data.map(account => {
-        // account[4] 是状态字段，暂时设为"验证中"
-        const updatedAccount = [...account];
-        updatedAccount[4] = '验证中'; // 临时状态
-        return updatedAccount;
+    if (res.code === 200 && res.data && res.data.length > 0) {
+      // 后端返回的是对象格式 {id, type, filePath, userName, status}
+      // 直接调用 setAccounts，它会处理对象格式
+      accountStore.setAccounts(res.data);
+      
+      // 将所有账号的状态暂时设为"验证中"（覆盖setAccounts转换的状态）
+      // 使用 nextTick 确保响应式更新
+      await nextTick();
+      accountStore.accounts.forEach(account => {
+        account.status = '验证中';
       });
-      accountStore.setAccounts(accountsWithPendingStatus);
       
       // 自动识别并添加新平台到筛选选项
       const formattedAccounts = accountStore.accounts
       autoAddPlatformsToFilters(formattedAccounts)
+    } else if (res.code === 200 && (!res.data || res.data.length === 0)) {
+      // 数据为空，清空账号列表
+      accountStore.setAccounts([]);
     }
   } catch (error) {
     console.error('快速获取账号数据失败:', error)
@@ -838,7 +850,14 @@ const baseFilteredAccounts = computed(() => {
  */
 const getAccountsByContentType = (contentType) => {
   const selectedPlatform = selectedPlatforms[contentType]
-  if (!selectedPlatform) return []
+  
+  // 如果没有选中平台，但有账号，尝试显示属于该内容类型的所有账号
+  if (!selectedPlatform) {
+    return baseFilteredAccounts.value.filter(account => {
+      const accountContentType = platformToContentType[account.platform]
+      return accountContentType === contentType
+    })
+  }
   
   return baseFilteredAccounts.value.filter(account => {
     // 首先检查平台是否匹配
